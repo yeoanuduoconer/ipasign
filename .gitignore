@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+*.ipa
+*.p12
+*.mobileprovision
+certs/*.cer
+certs/*.crt
+!certs/.gitkeep
+.ipasign/
+scratch_*.py

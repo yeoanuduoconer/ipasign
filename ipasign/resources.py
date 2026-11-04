@@ -99,7 +99,11 @@ def collect_resources(
             resolved = child.resolve()
             if resolved in skip_file_set:
                 continue
-            if name in ("Info.plist", ".DS_Store", "._.DS_Store"):
+            # Apple's rules only omit the bundle's own Info.plist / PkgInfo,
+            # not same-named resources in subdirectories.
+            if folder_path == root and name in ("Info.plist", "PkgInfo"):
+                continue
+            if name in (".DS_Store", "._.DS_Store"):
                 continue
             rel = child.relative_to(root).as_posix()
             if child.is_symlink():

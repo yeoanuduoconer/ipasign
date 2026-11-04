@@ -140,7 +140,9 @@ def _print_info(info: dict) -> None:
     print(f"主程序      : {info['executable']} [{', '.join(info['architectures']) or '未知'}]")
     if info.get("encrypted"):
         print("加密状态    : 已加密（App Store DRM，重签后无法直接运行）")
-    print(f"大小        : {info['payload_size'] / 1024 / 1024:.1f} MB")
+    size = info["payload_size"]
+    size_text = f"{size / 1024 / 1024:.1f} MB" if size >= 1024 * 1024 else f"{size / 1024:.0f} KB"
+    print(f"大小        : {size_text}")
     if info["signature"]:
         signature = info["signature"]
         print(

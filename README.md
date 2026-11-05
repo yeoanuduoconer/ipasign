@@ -35,7 +35,7 @@
 ```powershell
 git clone <repo> ipasign
 cd ipasign
-python -m pip install -e .
+python -m pip install -e ".[device]"   # device 可选：装到手机用
 # 可选：预先下载 Apple WWDR 中间证书到 ~/.ipasign/certs
 ipasign fetch-certs
 ```
@@ -120,6 +120,18 @@ ipasign verify app-signed.ipa -c cert.p12 -p 密码 -m profile.mobileprovision
 
 逐个 Mach-O 校验：CodeDirectory 页哈希、CMS 签名、主程序标识与 Bundle ID 一致性、
 entitlements 与描述文件的授权范围、描述文件有效期与证书列表。
+
+### 安装到手机
+
+```powershell
+ipasign devices                                  # 列出已连接的 iPhone / iPad
+ipasign install app-signed.ipa                   # 装到唯一连接的那台设备
+ipasign install app-signed.ipa --udid <UDID> --verify
+```
+
+依赖 `pymobiledevice3`（`pip install -e ".[device]"`）与 Apple 的设备驱动
+（iTunes 或 Apple Devices，负责 Apple Mobile Device Service）。手机要解锁并点「信任」。
+`--verify` 会在安装前先做一遍签名结构校验，避免装上去才发现证书不匹配。
 
 ### 其他诊断命令
 
@@ -206,7 +218,8 @@ iOS 要求 CMS 里带 Apple WWDR 中间证书。运行 `ipasign fetch-certs` 自
 - [x] 完整 Mach-O 重签（thin / fat、arm64 / arm64e / x86_64）
 - [x] 嵌套 bundle、资源封印、entitlements、requirements、CMS
 - [x] CLI + GUI、校验与诊断
-- [ ] Apple ID 自动登录并申请免费 7 天证书（类似 Sideloadly/AltStore，需要 anisette 数据）
+- [x] 设备通道：列出设备、把 IPA 直接装进手机（`devices` / `install`）
+- [ ] Apple ID 自动登录并申请免费 7 天证书（协议已打通到 GSA `init`，卡在 Apple 的设备身份校验）
 - [ ] dylib 注入、图标替换（可先用 `--engine zsign`）
 - [ ] DER entitlements（slot 7）
 - [ ] 多描述文件（为扩展单独指定 profile）

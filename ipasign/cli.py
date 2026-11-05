@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import List, Optional
 
-from . import __version__, bundle, ipa, macho
+from . import __version__, bundle, device, ipa, macho
 from .bundle import SignOptions
 from .errors import IpasignError
 from .pki import (
@@ -318,6 +318,52 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_devices(args: argparse.Namespace) -> int:
+    if not device.library_available():
+        raise IpasignError(
+            "缺少 pymobiledevice3，无法与手机通信。安装：\n"
+            "  python -m pip install pymobiledevice3"
+        )
+    devices = device.list_devices()
+    if args.json:
+        print(json.dumps([item.__dict__ for item in devices], ensure_ascii=False, indent=2))
+        return 0 if devices else 1
+    if not devices:
+        print("没有检测到设备。请确认：")
+        print("  1) 手机用数据线连上电脑；")
+        print("  2) 手机解锁，并在弹窗里点「信任」；")
+        print("  3) iTunes / Apple Devices 已安装（提供 Apple Mobile Device Service）。")
+        return 1
+    for item in devices:
+        marker = "" if item.paired else "  [未配对]"
+        print(f"{item.udid}  {item.label()}  [{item.connection or 'USB'}]{marker}")
+        if item.extra.get("pairing_error"):
+            print(f"    配对失败: {item.extra['pairing_error'][:160]}")
+    return 0
+
+
+def cmd_install(args: argparse.Namespace) -> int:
+    log = _log_factory(False, args.verbose)
+    ipa_path = Path(args.ipa)
+    if not ipa_path.is_file():
+        raise IpasignError(f"找不到 IPA 文件: {ipa_path}")
+
+    if args.verify:
+        log("安装前校验签名 ...")
+        report = verify_ipa(ipa_path)
+        if not report.ok:
+            for problem in report.all_problems()[:10]:
+                print(f"  [问题] {problem}")
+            raise IpasignError("签名校验未通过，已中止安装（加 --no-verify 可跳过）")
+
+    udid = device.install_ipa(
+        ipa_path, udid=args.udid, developer=args.developer, log=log
+    )
+    print(f"[完成] 已安装到设备 {udid}")
+    print("如果图标是灰色的，去 设置 → 通用 → VPN与设备管理 里信任对应证书。")
+    return 0
+
+
 def cmd_profile(args: argparse.Namespace) -> int:
     profile = ProvisioningProfile.load(args.profile)
     data = profile.describe()
@@ -427,6 +473,19 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--chain", action="append")
     verify.add_argument("--json", action="store_true")
     verify.set_defaults(func=cmd_verify)
+
+    devices = subparsers.add_parser("devices", help="列出已连接的 iPhone / iPad")
+    devices.add_argument("--json", action="store_true")
+    devices.set_defaults(func=cmd_devices)
+
+    install = subparsers.add_parser("install", help="把已签名的 IPA 安装到设备")
+    install.add_argument("ipa")
+    install.add_argument("--udid", help="目标设备 UDID（连接多台设备时必填）")
+    install.add_argument("--developer", action="store_true", help="作为开发者包安装")
+    install.add_argument("--verify", dest="verify", action="store_true", help="安装前校验签名结构")
+    install.add_argument("--no-verify", dest="verify", action="store_false", help="跳过安装前校验")
+    install.add_argument("-v", "--verbose", action="store_true")
+    install.set_defaults(func=cmd_install, verify=False)
 
     profile = subparsers.add_parser("profile", help="查看描述文件内容")
     profile.add_argument("profile")

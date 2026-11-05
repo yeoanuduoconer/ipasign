@@ -792,10 +792,16 @@ def _build_signature(
         special_slots[CSSLOT_ENTITLEMENTS] = hashlib.sha256(ent_blob).digest()
         # iOS 15+ also seals a DER copy of the entitlements; iOS 26 rejects
         # signatures that only carry the XML blob (0xE8008029).
-        der_ent_blob = der_entitlements_blob(
-            encode_entitlements(_plistlib.loads(params.entitlements))
-        )
-        special_slots[CSSLOT_DER_ENTITLEMENTS] = hashlib.sha256(der_ent_blob).digest()
+        # zsign only emits the DER copy when there are actual entitlements;
+        # frameworks get an empty XML blob and no DER slot.
+        entitlements_dict = _plistlib.loads(params.entitlements)
+        if entitlements_dict:
+            der_ent_blob = der_entitlements_blob(
+                encode_entitlements(entitlements_dict)
+            )
+            special_slots[CSSLOT_DER_ENTITLEMENTS] = hashlib.sha256(
+                der_ent_blob
+            ).digest()
 
     if params.info_plist is None and params.resource_dir is None and ent_blob is None:
         special_slots = {}

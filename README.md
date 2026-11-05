@@ -133,6 +133,23 @@ ipasign install app-signed.ipa --udid <UDID> --verify
 （iTunes 或 Apple Devices，负责 Apple Mobile Device Service）。手机要解锁并点「信任」。
 `--verify` 会在安装前先做一遍签名结构校验，避免装上去才发现证书不匹配。
 
+### 证书库与续签
+
+把一套 p12 + 描述文件存进本地证书库（`~/.ipasign/identities`），之后就不用每次写一长串参数：
+
+```powershell
+ipasign vault import corp cert.p12 -m profile.mobileprovision -p 密码
+ipasign vault list
+ipasign vault show corp -p 密码          # 包含证书链/有效期/匹配性自检
+ipasign renew corp app.ipa -o app-renewed.ipa -p 密码 --install
+ipasign doctor app.ipa --vault corp -p 密码 --device
+```
+
+- `vault` 只复制证书和描述文件，**密码不会落盘**，每次用时再输入；
+- `renew` 会检查描述文件是否过期，然后重签并可选择直接装机——适合 7 天/1 年到期前跑一次；
+- `doctor` 是签名前的体检：证书是否过期、链是否完整、描述文件是否覆盖这个 Bundle ID、
+  证书是否在描述文件名单里、团队是否一致、手机 UDID 是否在设备列表里。
+
 ### 其他诊断命令
 
 ```powershell
@@ -219,7 +236,8 @@ iOS 要求 CMS 里带 Apple WWDR 中间证书。运行 `ipasign fetch-certs` 自
 - [x] 嵌套 bundle、资源封印、entitlements、requirements、CMS
 - [x] CLI + GUI、校验与诊断
 - [x] 设备通道：列出设备、把 IPA 直接装进手机（`devices` / `install`）
-- [ ] Apple ID 自动登录并申请免费 7 天证书（协议已打通到 GSA `init`，卡在 Apple 的设备身份校验）
+- [x] 证书库、签名前体检、一键续签（`vault` / `doctor` / `renew`）
+- [ ] Apple ID 自动登录并申请免费 7 天证书（协议已打通到 GSA `init`，Apple 对所有请求统一返回 `-80045`，疑似对新客户端/环境的硬性限制）
 - [ ] dylib 注入、图标替换（可先用 `--engine zsign`）
 - [ ] DER entitlements（slot 7）
 - [ ] 多描述文件（为扩展单独指定 profile）

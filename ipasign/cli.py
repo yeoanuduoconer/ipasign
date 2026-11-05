@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import List, Optional
 
 from . import __version__, bundle, device, ipa, macho
+from . import doctor as doctor_mod
+from . import vault
 from .bundle import SignOptions
 from .errors import IpasignError
 from .pki import (
@@ -364,6 +366,123 @@ def cmd_install(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_vault(args: argparse.Namespace) -> int:
+    action = getattr(args, "action", None)
+    if action == "list":
+        items = vault.list_all()
+        if args.json:
+            print(json.dumps([item.meta for item in items], ensure_ascii=False, indent=2))
+            return 0
+        if not items:
+            print("证书库是空的。先导入一个：")
+            print("  ipasign vault import <名字> cert.p12 -m profile.mobileprovision -p 密码")
+            return 0
+        for item in items:
+            print(f"{item.name:20} {item.summary()}")
+        return 0
+
+    if action == "import":
+        stored = vault.save(
+            args.name, args.p12, args.profile, args.password, overwrite=args.force
+        )
+        print(f"[完成] 已存入证书库: {stored.name}")
+        print(f"  p12     : {stored.p12_path}")
+        if stored.profile_path:
+            print(f"  描述文件: {stored.profile_path}")
+        print(f"  Team    : {stored.meta.get('team_id') or '未知'}")
+        print(f"  有效期  : {str(stored.meta.get('profile_expires') or stored.meta.get('leaf_expires'))[:10]}")
+        return 0
+
+    if action == "show":
+        item = vault.load(args.name)
+        identity = load_identity(item.p12_path, args.password)
+        profile = (
+            ProvisioningProfile.load(item.profile_path) if item.profile_path else None
+        )
+        checks = doctor_mod.run_checks(
+            identity=identity, profile=profile, allow_expired_profile=True
+        )
+        if args.json:
+            payload = {
+                "meta": item.meta,
+                "identity": identity.describe(),
+                "profile": profile.describe() if profile else None,
+                "checks": [check.__dict__ for check in checks],
+            }
+            print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+            return 0
+        print(f"证书库条目: {item.name}")
+        for key, value in item.meta.items():
+            print(f"  {key:18}: {value}")
+        for check in checks:
+            print("  " + check.line())
+        return 0
+
+    if action == "rm":
+        vault.remove(args.name)
+        print(f"[完成] 已从证书库删除 {args.name}")
+        return 0
+    raise IpasignError("未知的 vault 操作")
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    identity = None
+    profile = None
+    if args.vault:
+        item = vault.load(args.vault)
+        identity = load_identity(item.p12_path, args.password)
+        identity = ensure_chain(identity, allow_download=False, log=lambda m: None)
+        if item.profile_path:
+            profile = ProvisioningProfile.load(item.profile_path)
+    else:
+        if args.p12:
+            identity = _load_identity(
+                args.p12, args.password, args.chain or [], allow_download=False,
+                log=lambda m: None,
+            )
+        if args.profile:
+            profile = ProvisioningProfile.load(args.profile)
+
+    devices = device.list_devices() if args.device else None
+    checks = doctor_mod.run_checks(
+        ipa_path=args.ipa, identity=identity, profile=profile, devices=devices
+    )
+    if args.json:
+        print(json.dumps([check.__dict__ for check in checks], ensure_ascii=False, indent=2))
+        return 0 if doctor_mod.all_ok(checks) else 1
+    for check in checks:
+        print(check.line())
+    print("结果: " + ("全部通过" if doctor_mod.all_ok(checks) else "有问题，先修上面的 FAIL 项"))
+    return 0 if doctor_mod.all_ok(checks) else 1
+
+
+def cmd_renew(args: argparse.Namespace) -> int:
+    log = _log_factory(False, args.verbose)
+    item = vault.load(args.name)
+    if item.profile_path is None:
+        raise IpasignError(f"证书 {item.name!r} 没有配套描述文件，无法续签")
+    identity = load_identity(item.p12_path, args.password)
+    identity = ensure_chain(identity, allow_download=True, log=log)
+    profile = ProvisioningProfile.load(item.profile_path)
+    if profile.is_expired():
+        raise IpasignError(
+            f"描述文件已于 {profile.expiration:%Y-%m-%d} 过期，需要重新生成后再续签"
+        )
+    output = Path(args.output) if args.output else Path(args.ipa).with_name(
+        f"{Path(args.ipa).stem}-renewed.ipa"
+    )
+    report = bundle.sign_ipa(
+        args.ipa, output, identity=identity, profile=profile,
+        options=SignOptions(bundle_id=args.bundle_id), log=log,
+    )
+    print(f"[完成] {output}  ({report.bundle_id}, 到期 {profile.expiration:%Y-%m-%d})")
+    if args.install:
+        log("安装到设备 ...")
+        udid = device.install_ipa(output, udid=args.udid, log=log)
+        print(f"[完成] 已安装到 {udid}")
+    return 0
+
+
 def cmd_profile(args: argparse.Namespace) -> int:
     profile = ProvisioningProfile.load(args.profile)
     data = profile.describe()
@@ -473,6 +592,52 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--chain", action="append")
     verify.add_argument("--json", action="store_true")
     verify.set_defaults(func=cmd_verify)
+
+    vault_parser = subparsers.add_parser("vault", help="本地证书库（p12 + 描述文件）")
+    vault_sub = vault_parser.add_subparsers(dest="action", required=True)
+    p = vault_sub.add_parser("list", help="列出证书库")
+    p.add_argument("--json", action="store_true")
+    p = vault_sub.add_parser("import", help="导入一套证书和描述文件")
+    p.add_argument("name")
+    p.add_argument("p12")
+    p.add_argument("-m", "--profile")
+    p.add_argument("-p", "--password")
+    p.add_argument("--force", action="store_true")
+    p = vault_sub.add_parser("show", help="查看某个证书的详情与自检")
+    p.add_argument("name")
+    p.add_argument("-p", "--password")
+    p.add_argument("--json", action="store_true")
+    p = vault_sub.add_parser("rm", help="从证书库删除")
+    p.add_argument("name")
+    vault_parser.set_defaults(func=cmd_vault)
+
+    doctor_parser = subparsers.add_parser(
+        "doctor", help="签名前自检：证书 / 描述文件 / 设备 / IPA 是否匹配"
+    )
+    doctor_parser.add_argument("ipa", nargs="?")
+    doctor_parser.add_argument("--vault", help="使用证书库里的条目")
+    doctor_parser.add_argument("-c", "--p12")
+    doctor_parser.add_argument("-p", "--password")
+    doctor_parser.add_argument("-m", "--profile")
+    doctor_parser.add_argument("--chain", action="append")
+    doctor_parser.add_argument(
+        "--device", action="store_true", help="同时检查已连接设备是否在描述文件里"
+    )
+    doctor_parser.add_argument("--json", action="store_true")
+    doctor_parser.set_defaults(func=cmd_doctor)
+
+    renew_parser = subparsers.add_parser(
+        "renew", help="用证书库里的身份重新签名（可选直接装机）"
+    )
+    renew_parser.add_argument("name")
+    renew_parser.add_argument("ipa")
+    renew_parser.add_argument("-o", "--output")
+    renew_parser.add_argument("-p", "--password")
+    renew_parser.add_argument("-b", "--bundle-id")
+    renew_parser.add_argument("--install", action="store_true")
+    renew_parser.add_argument("--udid")
+    renew_parser.add_argument("-v", "--verbose", action="store_true")
+    renew_parser.set_defaults(func=cmd_renew)
 
     devices = subparsers.add_parser("devices", help="列出已连接的 iPhone / iPad")
     devices.add_argument("--json", action="store_true")

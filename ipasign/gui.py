@@ -86,6 +86,10 @@ class SigningApp(tk.Tk):
         ttk.Button(actions, text="校验现有 IPA", command=self._verify).pack(
             side="left", padx=8
         )
+        self.install_button = ttk.Button(
+            actions, text="安装到手机", command=self._install
+        )
+        self.install_button.pack(side="left", padx=(0, 8))
         ttk.Button(actions, text="清空日志", command=self._clear_log).pack(side="left")
         ttk.Button(actions, text="打开输出目录", command=self._open_output_dir).pack(
             side="right"
@@ -174,6 +178,13 @@ class SigningApp(tk.Tk):
                     self._on_done(payload)
                 elif kind == "error":
                     self._on_error(str(payload))
+                elif kind == "installed":
+                    messagebox.showinfo(
+                        "安装完成", f"已安装到设备：\n{payload}\n\n第一次打开前记得去"
+                        "「设置 → 通用 → VPN与设备管理」信任证书。"
+                    )
+                elif kind == "install_error":
+                    messagebox.showerror("安装失败", str(payload))
         except queue.Empty:
             pass
         self.after(120, self._poll_queue)
@@ -286,6 +297,30 @@ class SigningApp(tk.Tk):
             messagebox.showinfo("校验结果", "签名结构校验通过")
         else:
             messagebox.showwarning("校验结果", "发现问题：" + "\n".join(report.all_problems()[:10]))
+
+    def _install(self) -> None:
+        """Push the signed IPA to a connected device (runs in a thread)."""
+        import threading
+
+        target = (self.output_var.get() or self.ipa_var.get()).strip()
+        if not target or not Path(target).is_file():
+            messagebox.showerror("提示", "请先选择要安装的 IPA")
+            return
+
+        self._log(f"准备安装: {target}")
+
+        def worker() -> None:
+            from .device import install_ipa
+
+            try:
+                udid = install_ipa(target, log=self._log)
+                self.queue.put(("status", f"已安装到 {udid}"))
+                self.queue.put(("installed", udid))
+            except Exception as exc:  # noqa: BLE001
+                self._log(f"[错误] {exc}")
+                self.queue.put(("install_error", str(exc)))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _open_output_dir(self) -> None:
         import subprocess

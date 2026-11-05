@@ -36,3 +36,52 @@ def test_friendly_error_translates_known_failures():
 
 def test_friendly_error_passes_unknown_text():
     assert device.friendly_error("some random error") == "some random error"
+
+def _make_ipa(tmp_path, bundle_id="com.example.demo", team="TEAM123456"):
+    """Minimal IPA with Info.plist + embedded profile (enough for metadata)."""
+    import plistlib
+    import zipfile
+
+    from tests import fixtures
+
+    _key, cert = fixtures.make_identity()
+    profile = fixtures.make_profile(certificates=[cert], app_id=f"{team}.*")
+    path = tmp_path / "sample.ipa"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("Payload/Demo.app/Info.plist", plistlib.dumps({"CFBundleIdentifier": bundle_id}))
+        archive.writestr("Payload/Demo.app/embedded.mobileprovision", profile)
+    return path
+
+
+def test_ipa_metadata_reads_bundle_and_team(tmp_path):
+    ipa = _make_ipa(tmp_path)
+    bundle_id, team = device._ipa_metadata(ipa)
+    assert bundle_id == "com.example.demo"
+    assert team == "TEAM123456"
+
+
+def test_confirm_installed_detects_foreign_signer(tmp_path, monkeypatch):
+    import pytest as _pytest
+
+    ipa = _make_ipa(tmp_path)
+    monkeypatch.setattr(
+        device,
+        "_installed_app",
+        lambda udid, bundle_id: {
+            "Entitlements": {"com.apple.developer.team-identifier": "OTHERTEAM"},
+            "SignerIdentity": "Apple iPhone OS Application Signing",
+        },
+    )
+    with _pytest.raises(device.DeviceError) as excinfo:
+        device._confirm_installed(ipa, "UDID")
+    assert "另外一个签名方" in str(excinfo.value) or "另一个签名方" in str(excinfo.value)
+
+
+def test_confirm_installed_accepts_matching_signer(tmp_path, monkeypatch):
+    ipa = _make_ipa(tmp_path)
+    monkeypatch.setattr(
+        device,
+        "_installed_app",
+        lambda udid, bundle_id: {"Entitlements": {"com.apple.developer.team-identifier": "TEAM123456"}},
+    )
+    device._confirm_installed(ipa, "UDID")

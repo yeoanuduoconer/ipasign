@@ -183,7 +183,97 @@ def install_ipa(
     if process.returncode != 0:
         detail = (process.stderr or process.stdout or "").strip()
         raise DeviceError(friendly_error(detail))
+
+    _confirm_installed(path, udid, log=log)
     return udid
+
+
+# ---------------------------------------------------------------------------
+# Post-install confirmation
+# ---------------------------------------------------------------------------
+
+def _ipa_metadata(path: Path) -> "tuple[str, str]":
+    """Read the IPA's bundle id and signing team without extracting it."""
+    import plistlib
+    import zipfile
+
+    from .profile import ProvisioningProfile
+
+    if path.suffix.lower() != ".ipa":
+        return "", ""
+    bundle_id = ""
+    team_id = ""
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = archive.namelist()
+            info_name = next(
+                (
+                    name
+                    for name in names
+                    if name.startswith("Payload/")
+                    and name.count("/") == 2
+                    and name.endswith("/Info.plist")
+                ),
+                None,
+            )
+            if info_name is None:
+                return "", ""
+            info = plistlib.loads(archive.read(info_name))
+            bundle_id = str(info.get("CFBundleIdentifier") or "")
+            profile_name = info_name[: -len("Info.plist")] + "embedded.mobileprovision"
+            if profile_name in names:
+                team_id = ProvisioningProfile.parse(archive.read(profile_name)).team_id
+    except Exception:  # noqa: BLE001 - best effort only
+        return bundle_id, team_id
+    return bundle_id, team_id
+
+
+def _installed_app(udid: str, bundle_id: str) -> "dict | None":
+    process = subprocess.run(
+        [sys.executable, "-m", "pymobiledevice3", "apps", "list", "--udid", udid],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    if process.returncode != 0:
+        return None
+    try:
+        payload = json.loads(process.stdout[process.stdout.find("{"):])
+    except (ValueError, json.JSONDecodeError):
+        return None
+    return payload.get(bundle_id)
+
+
+def _confirm_installed(path: Path, udid: str, log=lambda message: None) -> None:
+    """Verify the app really landed, and explain the common silent failures.
+
+    ``installation_proxy`` can return success while iOS keeps an existing app
+    with the same bundle id (for example the App Store build), which looks
+    like "installed" but nothing changes on the home screen.
+    """
+    if path.suffix.lower() != ".ipa":
+        return
+    bundle_id, expected_team = _ipa_metadata(path)
+    if not bundle_id:
+        return
+    app = _installed_app(udid, bundle_id)
+    if app is None:
+        raise DeviceError(
+            f"系统报告安装完成，但设备上查不到 {bundle_id}。\n"
+            "常见原因：签名校验未通过（证书与描述文件不匹配 / 证书被吊销）、"
+            "或设备存储空间不足。"
+        )
+    installed_team = str(
+        (app.get("Entitlements") or {}).get("com.apple.developer.team-identifier", "")
+    )
+    if expected_team and installed_team and expected_team != installed_team:
+        signer = app.get("SignerIdentity", "未知")
+        raise DeviceError(
+            f"设备上的 {bundle_id} 属于另一个签名方（team {installed_team}，{signer}），"
+            "本次安装没有覆盖它。\n"
+            "这通常意味着设备上已经装了同 Bundle ID 的 App Store 版本；"
+            "要安装当前这个包，需要先卸载设备上的同名 App。"
+        )
+    log(f"确认已安装: {bundle_id}")
 
 
 def restart_device(udid: str, log=lambda message: None) -> None:

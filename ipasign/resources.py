@@ -81,7 +81,12 @@ def collect_resources(
         kept = []
         for name in dirs:
             child = folder_path / name
-            if child.name in (CODE_SIGNATURE_DIR, "__MACOSX", ".git", ".svn", "CVS"):
+            # Only the bundle's own _CodeSignature is excluded; nested bundles
+            # keep theirs, and the parent seals those files too (zsign does
+            # the same, and iOS validates the full envelope).
+            if child.name in ("__MACOSX", ".git", ".svn", "CVS"):
+                continue
+            if child.name == CODE_SIGNATURE_DIR and folder_path == root:
                 continue
             if os.path.islink(child):
                 rel = child.relative_to(root).as_posix()

@@ -60,7 +60,8 @@ def test_sign_thin_macho_roundtrip():
     cd = signature.code_directory
     assert cd.identifier == "com.example.demo"
     assert cd.team_id == "TEAM123456"
-    assert cd.n_special == 5
+    # Info.plist, requirements, resources, XML entitlements and DER entitlements
+    assert cd.n_special == 7
     assert cd.code_limit == start
     assert cd.flags == 0
     assert signature.entitlements == ENTS

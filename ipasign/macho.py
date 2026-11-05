@@ -375,6 +375,14 @@ def entitlements_blob(xml: bytes) -> bytes:
     return struct.pack(">II", CSMAGIC_EMBEDDED_ENTITLEMENTS, 8 + len(xml)) + xml
 
 
+def der_entitlements_blob(payload: bytes) -> bytes:
+    """Wrap a DER plist in the embedded-DER-entitlements blob header."""
+    return (
+        struct.pack(">II", CSMAGIC_EMBEDDED_DER_ENTITLEMENTS, 8 + len(payload))
+        + payload
+    )
+
+
 def blob_wrapper(payload: bytes) -> bytes:
     """Wrap a CMS payload the way Apple (and zsign) store the signature slot."""
     return struct.pack(">II", CSMAGIC_BLOBWRAPPER, 8 + len(payload)) + payload
@@ -743,9 +751,20 @@ def _build_signature(
         special_slots[CSSLOT_RESOURCEDIR] = hashlib.sha256(params.resource_dir).digest()
 
     ent_blob = None
+    der_ent_blob = None
     if params.entitlements is not None:
+        import plistlib as _plistlib
+
+        from .derplist import encode_entitlements
+
         ent_blob = entitlements_blob(params.entitlements)
         special_slots[CSSLOT_ENTITLEMENTS] = hashlib.sha256(ent_blob).digest()
+        # iOS 15+ also seals a DER copy of the entitlements; iOS 26 rejects
+        # signatures that only carry the XML blob (0xE8008029).
+        der_ent_blob = der_entitlements_blob(
+            encode_entitlements(_plistlib.loads(params.entitlements))
+        )
+        special_slots[CSSLOT_DER_ENTITLEMENTS] = hashlib.sha256(der_ent_blob).digest()
 
     if params.info_plist is None and params.resource_dir is None and ent_blob is None:
         special_slots = {}
@@ -764,6 +783,8 @@ def _build_signature(
     blobs.append((CSSLOT_REQUIREMENTS, requirements))
     if ent_blob is not None:
         blobs.append((CSSLOT_ENTITLEMENTS, ent_blob))
+    if der_ent_blob is not None:
+        blobs.append((CSSLOT_DER_ENTITLEMENTS, der_ent_blob))
     if not params.ad_hoc:
         if params.key is None or not params.certificates:
             raise SignatureError("signing key and certificates are required")

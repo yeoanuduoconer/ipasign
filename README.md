@@ -192,8 +192,11 @@ SuperBlob
   CodeDirectory 布局、superblob 偏移、requirements、CMS 签名属性（含
   `1.2.840.113635.100.9.1/9.2` 两个 hash-agility 属性）均一致。
 - 生成的 CMS 用 OpenSSL `cms -verify` 可独立验证通过。
-- 未生成 **DER entitlements**（`CSSLOT_DER_ENTITLEMENTS`，slot 7）：iOS 15+ 仍接受
-  仅 XML entitlements 的签名，主流重签工具也如此。
+- **DER entitlements**（`CSSLOT_DER_ENTITLEMENTS`，slot 7）已实现，编码与 zsign 的输出
+  逐字节一致；iOS 15+ 会校验这一份，缺失时 iOS 26 可能报 `0xE8008029`
+  （code signature version is no longer supported）。
+- 尚未生成**备用 CodeDirectory**（`0x1000` 槽，SHA-1 + SHA-256 双签）：现代 iOS
+  通常不需要，但极老的签名格式会带它。
 - Requirements 使用 `identifier "..." and anchor apple generic` 的简化形式；
   这不影响 iOS 安装与启动，但与 `codesign -d` 打印出的完整 DR 略有差异。
 
@@ -239,7 +242,7 @@ iOS 要求 CMS 里带 Apple WWDR 中间证书。运行 `ipasign fetch-certs` 自
 - [x] 证书库、签名前体检、一键续签（`vault` / `doctor` / `renew`）
 - [ ] Apple ID 自动登录并申请免费 7 天证书（协议已打通到 GSA `init`，Apple 对所有请求统一返回 `-80045`，疑似对新客户端/环境的硬性限制）
 - [ ] dylib 注入、图标替换（可先用 `--engine zsign`）
-- [ ] DER entitlements（slot 7）
+- [x] DER entitlements（slot 7，与 zsign 输出逐字节一致）
 - [ ] 多描述文件（为扩展单独指定 profile）
 
 ## 开发与测试

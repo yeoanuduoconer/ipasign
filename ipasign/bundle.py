@@ -300,9 +300,11 @@ def _sign_bundle_contents(
     if embed_profile and profile is not None and options.embed_profile:
         (root / "embedded.mobileprovision").write_bytes(profile.raw)
 
-    nested = _nested_bundles(root)
+    # Seal nested bundles' files as well: iOS's installer validates the whole
+    # resource envelope, and omitting nested code makes it report an invalid
+    # signature (0xe8008019).  zsign does the same.
     code_resources, _entries = resources.build_code_resources(
-        root, executable=executable, skip_dirs=nested
+        root, executable=executable
     )
     signature_dir = root / resources.CODE_SIGNATURE_DIR
     signature_dir.mkdir(parents=True, exist_ok=True)

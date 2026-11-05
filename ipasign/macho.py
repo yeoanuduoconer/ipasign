@@ -700,13 +700,28 @@ def _sign_slice(data: bytes, params: SignParameters) -> bytes:
         assert code_sig is not None
     body = data[:dataoff]
 
+    # Keep whatever execSeg flags the previous signer used (codesign sets
+    # CS_EXECSEG_ALLOW_UNSIGNED on some app binaries; zsign preserves it).
+    original_exec_flags = None
+    try:
+        existing = read_signatures(data)
+        if existing:
+            original_exec_flags = existing[0].code_directory.exec_seg[2]
+    except Exception:  # noqa: BLE001 - unsigned / unusual binary
+        original_exec_flags = None
+
     linkedit = layout.linkedit
     link_off = linkedit.fileoff if linkedit else 0
     link_vmsize = linkedit.vmsize if linkedit else 0
 
     exec_seg = (0, 0, 0)
     if layout.text is not None and layout.filetype in (MH_EXECUTE, MH_DYLIB):
-        flags = CS_EXECSEG_MAIN_BINARY if layout.filetype == MH_EXECUTE else 0
+        default_flags = CS_EXECSEG_MAIN_BINARY if layout.filetype == MH_EXECUTE else 0
+        flags = (
+            original_exec_flags
+            if original_exec_flags is not None
+            else default_flags
+        )
         exec_seg = (layout.text.fileoff, layout.text.filesize, flags)
 
     def assemble(datasize: int, link_filesize: int, link_vmsize_new: int) -> bytes:

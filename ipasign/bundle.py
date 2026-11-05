@@ -415,7 +415,7 @@ def sign_app(
             nested_info, _n_raw, _n_fmt = _read_plist(bundle / "Info.plist")
             nested_id = str(nested_info.get("CFBundleIdentifier") or bundle.stem)
             kind = bundle.suffix.lower()
-            entitlements = None
+            entitlements = {}  # zsign emits an empty entitlements blob for frameworks
             embed_nested = False
             if kind in (".appex", ".app"):
                 stale = bundle / "embedded.mobileprovision"
@@ -454,7 +454,7 @@ def sign_app(
                 binary,
                 identifier=rel,
                 identity=identity,
-                entitlements=None,
+                entitlements={},
                 info_plist=None,
                 resource_dir=None,
                 options=options,

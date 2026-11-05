@@ -222,15 +222,10 @@ class ProvisioningProfile:
         if include_team_identifier:
             entitlements["com.apple.developer.team-identifier"] = team
 
-        # Keychain groups that used the wildcard application identifier have to
-        # follow the concrete bundle id, otherwise the app gets a different
-        # keychain group than the one it was signed for.
-        groups = entitlements.get("keychain-access-groups")
-        if isinstance(groups, list):
-            entitlements["keychain-access-groups"] = [
-                f"{team}.{bundle_id}" if group == f"{team}.*" else group
-                for group in groups
-            ]
+        # Keep the profile's keychain groups verbatim (including the
+        # "TEAM.*" wildcard): iOS authorises entitlements against the profile
+        # and zsign does the same; rewriting them to a concrete group is what
+        # makes iOS reject the signature on device.
 
         if extra:
             entitlements.update(extra)

@@ -48,7 +48,7 @@ def test_entitlements_for_rewrites_application_identifier():
     entitlements = profile.entitlements_for("com.example.demo")
     assert entitlements["application-identifier"] == "TEAM123456.com.example.demo"
     assert entitlements["com.apple.developer.team-identifier"] == "TEAM123456"
-    assert entitlements["keychain-access-groups"] == ["TEAM123456.com.example.demo"]
+    assert entitlements["keychain-access-groups"] == ["TEAM123456.*"]
     assert entitlements["get-task-allow"] is True
 
 

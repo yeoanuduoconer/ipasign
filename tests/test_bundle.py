@@ -76,7 +76,7 @@ def test_sign_ipa_end_to_end(tmp_path):
     ents = plistlib.loads(signature.entitlements)
     assert ents["application-identifier"] == "TEAM123456.com.example.demo"
     assert ents["com.apple.developer.team-identifier"] == "TEAM123456"
-    assert ents["keychain-access-groups"] == ["TEAM123456.com.example.demo"]
+    assert ents["keychain-access-groups"] == ["TEAM123456.*"]
 
     # Extension keeps its own (prefixed) identifier and its own profile copy.
     appex = contents.app_path / "PlugIns" / "Widget.appex"

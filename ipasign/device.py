@@ -182,6 +182,14 @@ def install_ipa(
         log(line)
     if process.returncode != 0:
         detail = (process.stderr or process.stdout or "").strip()
+        # pymobiledevice3 prints progress lines before the actual failure; keep
+        # the last error-looking line so the message is not truncated mid-way.
+        interesting = [
+            line for line in detail.splitlines()
+            if "ERROR" in line or "Error Domain" in line or "error:" in line
+        ]
+        if interesting:
+            detail = interesting[-1]
         raise DeviceError(friendly_error(detail))
 
     _confirm_installed(path, udid, log=log)

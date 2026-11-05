@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import subprocess
+import time
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -263,7 +264,12 @@ def _confirm_installed(path: Path, udid: str, log=lambda message: None) -> None:
     bundle_id, expected_team = _ipa_metadata(path)
     if not bundle_id:
         return
-    app = _installed_app(udid, bundle_id)
+    app = None
+    for _ in range(5):
+        app = _installed_app(udid, bundle_id)
+        if app is not None:
+            break
+        time.sleep(2)
     if app is None:
         raise DeviceError(
             f"系统报告安装完成，但设备上查不到 {bundle_id}。\n"

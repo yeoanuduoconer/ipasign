@@ -466,6 +466,20 @@ def build_code_directory(
     return header + ident + team + special_area + b"".join(code_hashes)
 
 
+def _pad_signature(blob: bytes, alignment: int = 16) -> bytes:
+    """Pad the embedded signature area to a 16-byte boundary.
+
+    Apple's codesign (and zsign) reserve an aligned signature area; iOS 26
+    rejects unaligned blobs with ``0xe8008019`` ("does not have a valid
+    signature").  The padding sits *after* the SuperBlob, outside
+    ``codeLimit``, so it is not hashed and ``length`` stays exact.
+    """
+    remainder = len(blob) % alignment
+    if not remainder:
+        return blob
+    return blob + b"\x00" * (alignment - remainder)
+
+
 def build_superblob(blobs: Sequence[Tuple[int, bytes]]) -> bytes:
     """Wrap ``(type, blob)`` pairs into a SuperBlob, ordered by type."""
     ordered = sorted(blobs, key=lambda item: item[0])
@@ -715,7 +729,9 @@ def _sign_slice(data: bytes, params: SignParameters) -> bytes:
     signature = b""
     for _ in range(4):
         head = assemble(datasize, link_filesize, link_vmsize_new)
-        signature = _build_signature(head, dataoff, params, exec_seg)
+        signature = _pad_signature(
+            _build_signature(head, dataoff, params, exec_seg)
+        )
         if len(signature) == datasize:
             return head + signature
         datasize = len(signature)

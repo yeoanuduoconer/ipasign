@@ -148,3 +148,10 @@ def test_encrypted_flag_is_parsed():
 
     assert _macho.is_encrypted(fixtures.make_macho(encrypted=True))
     assert not _macho.is_encrypted(fixtures.make_macho())
+
+def test_signature_area_is_16_byte_aligned():
+    key, cert = fixtures.make_identity()
+    signed = sign_macho(fixtures.make_macho(), _params(key, cert))
+    layout = parse_slice_layout(signed)
+    assert layout.code_sig.datasize % 16 == 0
+    assert layout.code_sig.dataoff + layout.code_sig.datasize == len(signed)

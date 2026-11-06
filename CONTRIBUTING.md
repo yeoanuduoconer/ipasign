@@ -1,10 +1,10 @@
-# 参与开发
+# Contributing
 
-## 环境
+## Environment
 
 - Python 3.10+
-- 不需要 Xcode、macOS、编译器
-- 只有跑真机安装测试时才需要 Apple 移动设备驱动（Windows）
+- Xcode, macOS, and a compiler are not required
+- The Apple mobile device driver (Windows) is only needed for on-device installation tests
 
 ```bash
 git clone <repo>
@@ -12,57 +12,57 @@ cd ipasign
 python -m pip install -e ".[dev]"
 ```
 
-可编辑安装（`-e`）后，改动源码立刻生效，无需重新安装。
+With an editable install (`-e`), source changes take effect immediately — no reinstall needed.
 
-## 常用命令
+## Common commands
 
 ```bash
-python -m pytest -q              # 全部测试
+python -m pytest -q              # all tests
 python -m pytest tests/test_macho.py -q
-python -m ipasign selfcheck      # 依赖 / 路径 / 设备自检
-python -m ipasign                # 交互界面
+python -m ipasign selfcheck      # dependency / path / device self-check
+python -m ipasign                # interactive interface
 ```
 
-## 代码结构
+## Code structure
 
 ```
 ipasign/
-├── app.py        入口：无参数进 TUI，有参数走 CLI
-├── tui.py        交互界面（rich）
-├── cli.py        命令行
-├── paths.py      所有路径解析（禁止硬编码绝对路径）
-├── device.py     装机（pymobiledevice3）
-├── watch.py      自动续签任务
-├── core/         签名引擎，不依赖 Apple 服务
-└── apple/        登录、证书申请、ADI
+├── app.py         entry point: no args → TUI, args → CLI
+├── tui.py         interactive interface (rich)
+├── cli.py         command line
+├── paths.py       all path resolution (no hardcoded absolute paths)
+├── device.py      installation (pymobiledevice3)
+├── watch.py       automatic renewal task
+├── core/          signing engine, independent of Apple services
+└── apple/         sign-in, certificate requests, ADI
 ```
 
-两条约定：
+Two conventions:
 
-1. **core 层不 import apple 层**，签名引擎应能独立使用
-2. **任何路径都走 `paths.py`**，不要出现 `C:\Users\...` 之类写死的路径
+1. **The core layer must not import the apple layer**; the signing engine should be usable standalone
+2. **Every path goes through `paths.py`**; never write hardcoded paths like `C:\Users\...`
 
-## 提交前
+## Before committing
 
 ```bash
 python -m pytest -q
 ```
 
-CI 会在 Python 3.10 / 3.11 / 3.12 上跑同样的测试，并检查 wheel 里是否包含内置原生库。
+CI runs the same tests on Python 3.10 / 3.11 / 3.12, and checks that the wheel bundles the native libraries.
 
-## 修改签名逻辑时
+## When changing signing logic
 
-`core/macho.py` 里每一处偏移都对应 iOS 的校验规则。如果改动涉及：
+Every offset in `core/macho.py` corresponds to an iOS verification rule. If your change touches:
 
-- CodeDirectory 版本 / 标志位
-- 特殊槽位（Info.plist、Requirements、CodeResources、Entitlements、DER）
-- CMS 的 hash agility 属性（`1.2.840.113635.100.9.1` / `.9.2`）
+- CodeDirectory versions / flags
+- special slots (Info.plist, Requirements, CodeResources, Entitlements, DER)
+- the CMS hash agility attributes (`1.2.840.113635.100.9.1` / `.9.2`)
 
-请先看 `docs/ARCHITECTURE.md` 的对应章节，并在测试里补一个回归用例
-（`tests/test_macho.py`、`tests/test_cms.py`）。
+read the corresponding section of `docs/ARCHITECTURE.md` first, and add a regression case
+to the tests (`tests/test_macho.py`, `tests/test_cms.py`).
 
-## 文档
+## Documentation
 
-- `README.md`：面向使用者
-- `docs/ARCHITECTURE.md`：面向开发者，含踩坑记录
-- `SECURITY.md`：数据边界与漏洞报告
+- `README.md`: for users
+- `docs/ARCHITECTURE.md`: for developers, including notes on pitfalls encountered
+- `SECURITY.md`: data boundaries and vulnerability reporting

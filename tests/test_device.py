@@ -31,7 +31,8 @@ def test_install_rejects_wrong_extension(tmp_path):
 
 def test_friendly_error_translates_known_failures():
     message = device.friendly_error("ERROR: ApplicationVerificationFailed")
-    assert "证书" in message or "描述文件" in message
+    assert "iOS rejected the signature" in message
+    assert "Original message" in message
 
 
 def test_friendly_error_passes_unknown_text():
@@ -76,7 +77,7 @@ def test_confirm_installed_detects_foreign_signer(tmp_path, monkeypatch):
     )
     with _pytest.raises(device.DeviceError) as excinfo:
         device._confirm_installed(ipa, "UDID")
-    assert "另外一个签名方" in str(excinfo.value) or "另一个签名方" in str(excinfo.value)
+    assert "different signer" in str(excinfo.value)
 
 
 def test_confirm_installed_accepts_matching_signer(tmp_path, monkeypatch):

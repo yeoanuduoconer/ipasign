@@ -107,7 +107,7 @@ def _obtain_identity(
     if reuse:
         stored = vault.load(reuse)
         identity = load_identity(stored.p12_path, password)
-        log(f"[..] 复用证书: {identity.leaf.subject.rfc4514_string()}")
+        log(f"[..] Reusing certificate: {identity.leaf.subject.rfc4514_string()}")
         return identity, None, True
 
     before = {c["certificateId"] for c in client.list_certificates(team_id)}
@@ -126,7 +126,7 @@ def _obtain_identity(
 
     csr = _generate_csr(key)
     try:
-        log("[..] 提交 CSR，申请开发证书")
+        log("[..] Submitting the CSR to request a development certificate")
         client.submit_csr(team_id, csr)
     except DeveloperError as error:
         if error.payload.get("resultCode") != CERT_LIMIT_CODE:
@@ -134,17 +134,18 @@ def _obtain_identity(
         entry, identity = _vault_identity_for_team(team_id, password)
         if identity is not None:
             key_stash.unlink(missing_ok=True)
-            log(f"[..] 证书名额已满，改用证书库中的证书: {entry.name}")
+            log(f"[..] Certificate limit reached; using the vault certificate: {entry.name}")
             return identity, None, True
         if allow_revoke:
             revoked = revoke_all_certificates(client, team_id, log=log)
-            log(f"[..] 已吊销 {revoked} 张旧证书，重新提交申请")
+            log(f"[..] Revoked {revoked} old certificate(s); submitting the request again")
             client.submit_csr(team_id, csr)
         else:
             key_stash.unlink(missing_ok=True)
             raise RuntimeError(
-                "证书名额已满（免费 Apple ID 只能有 1 张开发证书）。"
-                "账号里的旧证书没有对应私钥，可以吊销后重试。"
+                "Certificate limit reached (a free Apple ID can hold only 1 development "
+                "certificate). The old certificate in the account has no matching private "
+                "key here; revoke it and retry."
             ) from error
 
     fresh = [
@@ -152,16 +153,16 @@ def _obtain_identity(
         if c.get("certificateId") not in before
     ]
     if not fresh:
-        raise RuntimeError("Apple 没有返回新证书")
+        raise RuntimeError("Apple did not return a new certificate")
     cert_info = fresh[0]
     content = cert_info.get("certContent") or _find_cert_content(cert_info)
     if not content:
-        raise RuntimeError("证书列表里没有 certContent")
+        raise RuntimeError("the certificate list has no certContent")
     leaf = x509.load_der_x509_certificate(
         content if isinstance(content, (bytes, bytearray)) else base64.b64decode(content)
     )
     key_stash.unlink(missing_ok=True)
-    log(f"[..] 证书签发成功: {leaf.subject.rfc4514_string()}")
+    log(f"[..] Certificate issued: {leaf.subject.rfc4514_string()}")
     identity = ensure_chain(
         SigningIdentity(key=key, certificates=[leaf]), allow_download=True, log=log
     )
@@ -177,7 +178,7 @@ def revoke_all_certificates(client: DeveloperClient, team_id: str, log=print) ->
     """
     certificates = client.list_certificates(team_id)
     for certificate in certificates:
-        log(f"[..] 吊销旧证书 {certificate.get('certificateId')}")
+        log(f"[..] Revoking old certificate {certificate.get('certificateId')}")
         client.revoke_certificate(
             team_id, certificate["certificateId"], certificate["serialNumber"]
         )
@@ -189,9 +190,9 @@ def _ensure_app_id(
     """Reuse the App ID when it already exists (free accounts have a quota)."""
     for existing in client.list_app_ids(team_id):
         if existing.get("identifier") == bundle_id:
-            log(f"[..] 复用 App ID: {existing.get('appIdId')}")
+            log(f"[..] Reusing App ID: {existing.get('appIdId')}")
             return existing
-    log(f"[..] 注册 App ID {bundle_id}")
+    log(f"[..] Registering App ID {bundle_id}")
     app_id = client.add_app_id(team_id, bundle_id, app_name)
     log(f"[..] App ID: {app_id['appIdId']}")
     return app_id
@@ -212,24 +213,26 @@ def issue(
     """Create (or reuse) a certificate + profile for ``bundle_id``."""
     device = apple_auth_bridge.open_device()
     if device.session is None:
-        raise RuntimeError("尚未登录，请先运行: ipasign login --account <Apple ID>")
+        raise RuntimeError(
+            "not signed in yet; run `ipasign login --account <Apple ID>` first"
+        )
     headers = apple_auth_bridge.developer_headers(device, device.session)
     client = DeveloperClient(headers)
 
     teams = client.list_teams()
     if not teams:
-        raise RuntimeError("该 Apple ID 没有开发者团队")
+        raise RuntimeError("this Apple ID has no developer team")
     team = teams[0]
     team_id = team["teamId"]
-    log(f"[..] 团队: {team.get('name')} ({team_id})")
+    log(f"[..] Team: {team.get('name')} ({team_id})")
 
     if device_udid:
         known = {d.get("deviceNumber") for d in client.list_devices(team_id)}
         if device_udid not in known:
-            log(f"[..] 注册设备 {device_udid}")
+            log(f"[..] Registering device {device_udid}")
             client.add_device(team_id, device_udid, device_name)
         else:
-            log(f"[..] 设备已注册: {device_udid}")
+            log(f"[..] Device already registered: {device_udid}")
 
     identity, cert_info, _reused = _obtain_identity(
         client,
@@ -242,7 +245,7 @@ def issue(
 
     app_id = _ensure_app_id(client, team_id, bundle_id, app_name, log)
 
-    log("[..] 下载描述文件")
+    log("[..] Downloading the provisioning profile")
     profile_bytes = client.download_profile(team_id, app_id["appIdId"])
 
     if not password:
@@ -270,7 +273,7 @@ def issue(
             store_password=True,
         )
 
-    log(f"[完成] 已存入证书库: {name}")
+    log(f"[done] Stored in the vault: {name}")
     return {
         "name": name,
         "team_id": team_id,

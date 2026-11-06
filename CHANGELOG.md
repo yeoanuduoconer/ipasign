@@ -1,35 +1,35 @@
-# 变更记录
+# Changelog
 
-格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
+The format follows [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/), and version numbers follow Semantic Versioning.
 
 ## [1.0.0] - 2026-11-07
 
-首个可用版本。
+First usable release.
 
-### 功能
+### Features
 
-- **签名引擎**：纯 Python 重建 Mach-O 代码签名（CodeDirectory、requirements、
-  CMS/PKCS#7、DER entitlements），不依赖 zsign 等外部工具
-- **资源封印**：生成 `_CodeSignature/CodeResources`，嵌套 bundle（appex、
-  framework、dylib）逐层签名
-- **证书工厂**：用自己的 Apple ID 登录，自动申请开发证书、App ID、描述文件
-  （自动注册设备、复用证书与 App ID）
-- **设备证明**：内置 ADI v3 支持，不依赖第三方 anisette 服务
-- **装机**：通过 pymobiledevice3 安装到 USB / Wi-Fi 连接的设备
-- **自动续签**：到期前自动重新申请描述文件 → 重签 → 重装，可守护循环
-- **交互界面**：rich TUI，菜单项自包含（缺登录/缺证书会就地引导）
-- **双引擎**：默认 native，可用 `--engine zsign` 切到外部 zsign
+- **Signing engine**: rebuilds Mach-O code signing in pure Python (CodeDirectory, requirements,
+  CMS/PKCS#7, DER entitlements), with no dependency on zsign or other external tools
+- **Resource sealing**: generates `_CodeSignature/CodeResources`; nested bundles (appex,
+  framework, dylib) are signed layer by layer
+- **Certificate factory**: sign in with your own Apple ID and automatically request development
+  certificates, App IDs, and provisioning profiles (registering devices and reusing certificates and App IDs automatically)
+- **Device attestation**: built-in ADI v3 support, with no dependency on third-party anisette services
+- **Installation**: install to devices connected over USB / Wi-Fi through pymobiledevice3
+- **Automatic renewal**: before expiry, automatically request the provisioning profile again → re-sign → reinstall; can run as a daemon loop
+- **Interactive interface**: rich TUI with self-contained menu items (it guides you in place when sign-in or a certificate is missing)
+- **Dual engines**: native by default; switch to the external zsign with `--engine zsign`
 
-### 修复（开发过程中的关键问题）
+### Fixes (key issues during development)
 
-- `0xe8008019`：CMS 的 9.1 属性里 `cdhashes` 必须是 `sha256(CodeDirectory)` 的
-  前 20 字节，而非完整 32 字节
-- `0xE8008029`：iOS 26 要求 DER 形式的 entitlements（slot 7）
-- 签名区按 16 字节对齐；dylib 的 CodeDirectory 标识符取 `LC_ID_DYLIB` 的 basename
-- 嵌套文件必须纳入父级 `CodeResources`；`files2` 条目需同时带 SHA-1 与 SHA-256
+- `0xe8008019`: the `cdhashes` in the CMS 9.1 attribute must be the first 20 bytes of
+  `sha256(CodeDirectory)`, not the full 32 bytes
+- `0xE8008029`: iOS 26 requires entitlements in DER form (slot 7)
+- The signing area is aligned to 16 bytes; a dylib's CodeDirectory identifier takes the basename of `LC_ID_DYLIB`
+- Nested files must be included in the parent `CodeResources`; `files2` entries must carry both SHA-1 and SHA-256
 
-### 已知限制
+### Known limitations
 
-- 免费 Apple ID：同时只能有 1 张开发证书，描述文件 7 天有效，App ID 每周约 10 个
-- 内置原生库目前只提供 Windows x64；其他平台需自行编译
-- 插线安装需要 Apple 移动设备驱动（系统级，无法绕过）
+- Free Apple ID: only 1 development certificate at a time, provisioning profiles are valid for 7 days, and roughly 10 App IDs per week
+- The bundled native library currently ships for Windows x64 only; other platforms must build it themselves
+- Wired installation requires the Apple mobile device driver (system-level, cannot be bypassed)

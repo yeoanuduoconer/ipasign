@@ -54,9 +54,9 @@ def find_library() -> Path:
     if found is not None:
         return found
     raise AnisetteError(
-        "找不到 apple-auth 核心库（apple_auth.dll）。\n"
-        "编译方法见 README，然后把库文件放到 ~/.ipasign/native/，"
-        "或设置 IPASIGN_APPLE_AUTH_DLL 指向它。"
+        "cannot find the apple-auth core library (apple_auth.dll).\n"
+        "See the README for build instructions, then put the library in "
+        "~/.ipasign/native/ or point IPASIGN_APPLE_AUTH_DLL at it."
     )
 
 

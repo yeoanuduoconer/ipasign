@@ -347,8 +347,9 @@ def ensure_chain(
 
     if len(certificates) < 2:
         log(
-            "未能自动补全 Apple 中间证书；iOS 会拒绝安装。"
-            "请用 --chain 指定 AppleWWDRCA*.cer，或运行 `ipasign fetch-certs`"
+            "Could not complete the Apple intermediate certificate chain automatically; "
+            "iOS will reject the install. Pass AppleWWDRCA*.cer with --chain, or run "
+            "`ipasign fetch-certs`"
         )
 
     return SigningIdentity(key=identity.key, certificates=certificates)

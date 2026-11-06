@@ -81,7 +81,7 @@ def verify_bundle(
     report = VerificationReport(source=app_path)
     info_path = app_path / "Info.plist"
     if not info_path.is_file():
-        report.problems.append("缺少 Info.plist")
+        report.problems.append("missing Info.plist")
         return report
     info = plistlib.loads(info_path.read_bytes())
     report.bundle_id = str(info.get("CFBundleIdentifier", ""))
@@ -93,11 +93,11 @@ def verify_bundle(
         try:
             signatures = macho.read_signatures(data)
         except SignatureError as exc:
-            check.problems.append(f"无法解析签名: {exc}")
+            check.problems.append(f"cannot parse the signature: {exc}")
             report.checks.append(check)
             continue
         if not signatures:
-            check.problems.append("未签名")
+            check.problems.append("unsigned")
             report.checks.append(check)
             continue
         check.signed = True
@@ -116,9 +116,9 @@ def verify_bundle(
                     if not check.signer:
                         check.signer = verified.certificate.subject.rfc4514_string()
                 except Exception as exc:  # noqa: BLE001
-                    check.problems.append(f"CMS 校验失败: {exc}")
+                    check.problems.append(f"CMS verification failed: {exc}")
             else:
-                check.problems.append("缺少 CMS 签名（ad-hoc）")
+                check.problems.append("missing CMS signature (ad-hoc)")
             if signature.entitlements:
                 try:
                     check.entitlements = plistlib.loads(signature.entitlements)
@@ -134,19 +134,23 @@ def verify_bundle(
     if main_check and main_check.identifier:
         if main_check.identifier != report.bundle_id:
             report.problems.append(
-                f"主程序签名标识 {main_check.identifier!r} 与 Bundle ID {report.bundle_id!r} 不一致"
+                f"main executable signing identifier {main_check.identifier!r} does not "
+                f"match Bundle ID {report.bundle_id!r}"
             )
     elif main_check is not None:
-        report.problems.append("主程序没有可读的签名标识")
+        report.problems.append("the main executable has no readable signing identifier")
 
     entitlements = main_check.entitlements if main_check else None
     if entitlements:
         appid = entitlements.get("application-identifier")
         if not appid:
-            report.problems.append("主程序缺少 application-identifier 权限")
+            report.problems.append(
+                "the main executable lacks the application-identifier entitlement"
+            )
         elif profile is not None and not str(appid).endswith("." + report.bundle_id):
             report.problems.append(
-                f"application-identifier {appid!r} 与 Bundle ID {report.bundle_id!r} 不匹配"
+                f"application-identifier {appid!r} does not match Bundle ID "
+                f"{report.bundle_id!r}"
             )
 
     embedded = app_path / "embedded.mobileprovision"
@@ -154,14 +158,15 @@ def verify_bundle(
         try:
             profile = ProvisioningProfile.parse(embedded.read_bytes())
         except Exception as exc:  # noqa: BLE001
-            report.problems.append(f"内嵌描述文件损坏: {exc}")
+            report.problems.append(f"embedded profile is corrupt: {exc}")
     if profile is not None:
         report.profile = profile.describe()
         if profile.is_expired():
-            report.problems.append("描述文件已过期")
+            report.problems.append("the provisioning profile has expired")
         if not profile.supports_bundle_id(report.bundle_id):
             report.problems.append(
-                f"描述文件不覆盖 Bundle ID {report.bundle_id!r}（{profile.application_identifier}）"
+                f"the profile does not cover Bundle ID {report.bundle_id!r} "
+                f"({profile.application_identifier})"
             )
         if entitlements:
             granted = profile.entitlements
@@ -172,12 +177,14 @@ def verify_bundle(
                                                       "com.apple.developer.team-identifier")
             )
             if missing:
-                report.problems.append("描述文件未授予的权限: " + ", ".join(missing))
+                report.problems.append("entitlements not granted by the profile: " + ", ".join(missing))
         if identity is not None and not profile.has_certificate(identity.leaf):
-            report.problems.append("签名证书不在描述文件的证书列表中")
+            report.problems.append(
+                "the signing certificate is not in the profile's certificate list"
+            )
 
     if not any(check.signed for check in report.checks):
-        report.problems.append("没有任何已签名的 Mach-O 文件")
+        report.problems.append("no signed Mach-O files")
     return report
 
 

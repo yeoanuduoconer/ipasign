@@ -41,9 +41,9 @@ def library_path() -> Path:
     if found is not None:
         return found
     raise AppleAuthUnavailable(
-        "找不到 apple-auth 原生客户端（apple_auth_client.dll）。\n"
-        "编译方法见 README，然后把库文件放到 ~/.ipasign/native/，"
-        "或设置环境变量 APPLE_AUTH_LIBRARY 指向它。"
+        "cannot find the apple-auth native client (apple_auth_client.dll).\n"
+        "See the README for build instructions, then put the library in "
+        "~/.ipasign/native/ or point the APPLE_AUTH_LIBRARY environment variable at it."
     )
 
 

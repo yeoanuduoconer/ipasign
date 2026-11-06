@@ -58,8 +58,8 @@ def sign_with_zsign(
     binary = find_zsign()
     if binary is None:
         raise IpasignError(
-            "没有找到 zsign。下载 zsign 后设置 IPASIGN_ZSIGN 指向它，"
-            "例如：\n  set IPASIGN_ZSIGN=C:\\path\\to\\zsign.exe"
+            "zsign was not found. Download zsign and point IPASIGN_ZSIGN at it, "
+            "for example:\n  set IPASIGN_ZSIGN=C:\\path\\to\\zsign.exe"
         )
     command = [
         str(binary),
@@ -86,5 +86,5 @@ def sign_with_zsign(
         log(line)
     if process.returncode != 0 or not Path(output_ipa).is_file():
         detail = (process.stderr or process.stdout or "").strip()[-600:]
-        raise IpasignError(f"zsign 签名失败：{detail}")
+        raise IpasignError(f"zsign signing failed: {detail}")
     return Path(output_ipa)

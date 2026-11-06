@@ -75,8 +75,8 @@ def test_doctor_detects_self_signed_and_expired_profile(tmp_path):
     )
     checks = doctor.run_checks(identity=identity, profile=expired)
     by_name = {check.name: check for check in checks}
-    assert not by_name["证书链"].ok
-    assert not by_name["描述文件有效期"].ok
+    assert not by_name["Certificate chain"].ok
+    assert not by_name["Profile expiry"].ok
 
 
 def test_doctor_flags_bundle_id_mismatch(tmp_path):
@@ -90,7 +90,7 @@ def test_doctor_flags_bundle_id_mismatch(tmp_path):
 
     checks = doctor.run_checks(ipa_path=ipa, identity=identity, profile=profile)
     by_name = {check.name: check for check in checks}
-    assert not by_name["描述文件覆盖 Bundle ID"].ok
+    assert not by_name["Profile covers Bundle ID"].ok
     assert doctor.all_ok(checks) is False
 
 
@@ -103,9 +103,9 @@ def test_doctor_passes_for_matching_identity(tmp_path):
 
     checks = doctor.run_checks(ipa_path=ipa, identity=identity, profile=profile)
     by_name = {check.name: check for check in checks}
-    assert by_name["描述文件覆盖 Bundle ID"].ok
-    assert by_name["证书在描述文件名单内"].ok
-    assert by_name["团队一致"].ok
+    assert by_name["Profile covers Bundle ID"].ok
+    assert by_name["Certificate listed in profile"].ok
+    assert by_name["Team matches"].ok
 
 
 def test_ipa_bundle_id_reads_payload(tmp_path):

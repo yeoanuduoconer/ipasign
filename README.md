@@ -1,101 +1,75 @@
 # ipasign
 
-**iOS IPA 重签名工具** —— 纯 Python 签名引擎 + 交互式终端界面。
+**iOS IPA re-signing toolkit** — a pure-Python signing engine with an interactive terminal UI.
 
-不用 Xcode，不用 macOS，不用第三方签名服务：证书、描述文件、Mach-O 签名、IPA 打包、设备安装全部在本地完成。
+No Xcode, no macOS, no third-party signing service: certificates, provisioning profiles, Mach-O code signing, IPA packaging and device installation all happen locally.
+
+**English** | [简体中文](README.zh-CN.md)
 
 ```
-+------------------------- ipasign  iOS 签名工具 --------------------------+
-| 版本      1.0.0                                                          |
-| 证书库    0 套 (空)                                                      |
-| 登录      未登录                                                         |
-| 设备      未检测到                                                       |
-| 配置目录  <项目目录>\.ipasign                                            |
-+--------------------------------------------------------------------------+
-  1       Apple ID 登录（申请开发者会话）  
-  2       申请证书 + 描述文件（证书工厂）  
-  3       签名 IPA                         
-  4       安装到设备                       
-  5       签名体检（doctor）               
-  6       证书库管理                       
-  7       设备与驱动信息                   
-  8       自动续签（到期自动重签重装）     
-  9       关于 / 路径                      
-  0       退出                             
++------------------------ ipasign  iOS signing tool -------------------------+
+| Version   1.0.0                                                            |
+| Vault     0 identities (empty)                                             |
+| Account   not signed in                                                    |
+| Device    none detected                                                    |
+| Data dir  <data dir>                                                       |
++----------------------------------------------------------------------------+
+  1       Apple ID sign-in (developer session)  
+  2       Issue certificate + profile           
+  3       Sign an IPA                           
+  4       Install to device                     
+  5       Check a signed IPA (doctor)           
+  6       Manage the vault                      
+  7       Devices and drivers                   
+  8       Auto-renew (re-sign and reinstall)    
+  9       About / paths                         
+  0       Quit                                  
 ```
 
-菜单项是**自包含**的：没登录就直接点「2」，它会先引导你登录再继续；证书库为空时点「3」，它会先帮你申请一套证书。
+Menu items are **self-sufficient**: pick `2` without signing in and it walks you through sign-in first; pick `3` with an empty vault and it offers to issue a certificate.
 
-## 功能一览
+## Features
 
-| 能力 | 说明 |
+| Capability | Notes |
 | --- | --- |
-| 重签名 | 解析 / 重建 Mach-O 代码签名：CodeDirectory、requirements、CMS、DER entitlements |
-| 资源封印 | 生成 `_CodeSignature/CodeResources`，嵌套 bundle 一并纳入 |
-| IPA 打包 | 解包 → 逐层签名（appex / framework / dylib）→ 重打包 |
-| 证书工厂 | 自己的 Apple ID 登录，自动申请开发证书 + App ID + 描述文件 |
-| 设备证明 | 自动 provision ADI v3（Apple 设备身份），不依赖任何第三方 anisette 服务 |
-| 装机 | 通过 `pymobiledevice3` 安装到 USB 或 Wi-Fi 连接的设备 |
-| 自动续签 | 到期前自动重新申请描述文件 → 重签 → 重装，可守护循环 |
-| 体检 | 证书链、有效期、Bundle ID 覆盖、设备 UDID、团队一致性逐项检查 |
-| 证书库 | 多套身份集中管理，`renew` 一键重签 |
-| 双引擎 | 默认自研 `native` 引擎，需要时可切到外部 `zsign` |
+| Re-signing | Parses and rebuilds the Mach-O code signature: CodeDirectory, requirements, CMS, DER entitlements |
+| Resource seal | Generates `_CodeSignature/CodeResources`, nested bundles included |
+| IPA packaging | Unpack → sign every layer (appex / framework / dylib) → repack |
+| Certificate factory | Signs in with your own Apple ID; issues a development certificate, App ID and profile |
+| Device attestation | Provisions ADI v3 locally; no third-party anisette service |
+| Installation | Installs over USB or Wi-Fi through `pymobiledevice3` |
+| Auto-renew | Re-issues the profile before expiry, re-signs and reinstalls on a loop |
+| Doctor | Checks the chain, validity, Bundle ID coverage, device UDID and team consistency |
+| Vault | Keeps several identities, one command to re-sign |
+| Two engines | `native` (default, pure Python) or an external `zsign` |
 
-## 安装
+## Install
 
-### 安装（需要 Python 3.10+）
-
-```bash
-pip install .          # 或安装发布包：pip install ipasign
-```
-
-装完直接就是命令，任意目录可用（pip 会把启动器放进 Python 的 Scripts 目录，
-该目录在 PATH 里）：
-
-```powershell
-ipasign
-```
-
-**原生登录库已经打包在 wheel 里**（`ipasign/native/win-x64/`），所以登录、
-申请证书开箱即用，不需要编译任何东西。
-
-装机功能额外装一个依赖：
+Requires **Python 3.10+**. The native sign-in libraries ship inside the wheel
+(`ipasign/native/win-x64/`), so sign-in and certificate issuing work out of the box.
 
 ```bash
-pip install ".[device]"      # 或发布后：pip install "ipasign[device]"
+pip install .            # or, once published: pip install ipasign
+ipasign                  # works from any directory
 ```
 
-开发时用可编辑安装，改代码立即生效：
+Optional extras:
 
 ```bash
-pip install -e ".[all]"
+pip install ".[device]"  # adds pymobiledevice3 for installing to a device
+pip install -e ".[all]"  # development: editable install with test dependencies
 ```
 
-**唯一的系统级前提**：如果要「插线装到 iPhone/iPad」，Windows 需要 Apple 的
-USB 驱动（iTunes 或「Apple Devices」应用，装一次即可）。这是设备驱动，
-任何装机工具都绕不开；**签名、登录、申请证书、自动续签完全不需要它**。
-macOS 自带该驱动。
+The only system-level requirement is Apple's USB driver (iTunes or the
+**Apple Devices** app) on Windows, and only for installing over a cable.
+macOS ships that driver. **Signing, sign-in, issuing and auto-renew do not need it.**
 
-卸载：`pip uninstall ipasign`。
+Uninstall with `pip uninstall ipasign`.
 
-### 从源码安装
+### Building the native libraries on other platforms
 
-```bash
-# 基础功能（签名 / 校验 / 证书库 / TUI）
-pip install -e .
-
-# 需要装机功能时
-pip install -e ".[device]"
-
-# 开发者：测试
-pip install -e ".[all]"
-```
-
-要求 Python 3.10+，无系统级依赖。Windows / macOS / Linux 均可运行。
-
-### 让「登录 / 证书工厂」生效
-
-自动申请证书需要本地编译的 `apple_auth_client`（MIT 协议，基于 [apple-auth](https://github.com/apple-auth/apple-auth) 的 GrandSlam 实现）：
+Windows x64 is bundled. For macOS, Linux or Windows ARM64, build
+[apple-auth](https://github.com/apple-auth/apple-auth) once:
 
 ```bash
 git clone https://github.com/apple-auth/apple-auth
@@ -105,184 +79,204 @@ cmake -S apple-auth -B apple-auth-client -G "Visual Studio 17 2022" -A x64 \
 cmake --build apple-auth-client --config Release
 ```
 
-**Windows x64 已经内置**（`ipasign/native/win-x64/`），无需编译即可使用登录与证书申请。
-其他平台（macOS / Linux / Windows ARM64）需要自行编译一次。编译后让 `ipasign` 找到它，
-按以下顺序查找：
+Then let ipasign find the result, in this order:
 
-1. **环境变量**（最直接）
+1. `APPLE_AUTH_LIBRARY` — full path to `apple_auth_client.dll`
+2. `<data dir>/native/` — copy the DLL plus `libcurl`, `plist-2.0` and `z`
+3. the source checkout (development layout)
+4. the platform application-data directory
+5. `PATH`
 
-   ```powershell
-   $env:APPLE_AUTH_LIBRARY = "D:\builds\apple-auth-client\Release\apple_auth_client.dll"
-   ```
+All locations are resolved by `ipasign/paths.py`; no absolute path is hard-coded.
+Other environment variables: `IPASIGN_HOME`, `IPASIGN_NATIVE_DIR`,
+`IPASIGN_APPLE_AUTH_DLL`, `IPASIGN_ZSIGN`, `IPASIGN_LANG`.
 
-2. **用户数据目录**（推荐，之后无需再配）
+## Quick start
 
-   ```
-   ~/.ipasign/native/apple_auth_client.dll     ← 客户端（登录、申请证书）
-   ~/.ipasign/native/apple_auth.dll            ← 核心（ADI / OTP）
-   ```
-
-   Windows 上是 `C:\Users\<你>\.ipasign\native\`。把 DLL 和它依赖的
-   `libcurl.dll`、`plist-2.0.dll`、`z.dll` 一起放进去。
-
-3. **开发布局**：库放在仓库同级目录（`apple-auth-client/Release/`）也会被自动找到。
-
-所有路径都由 `ipasign/paths.py` 统一解析，代码里没有写死任何绝对路径。
-额外的环境变量：`IPASIGN_HOME`（改数据目录）、`IPASIGN_NATIVE_DIR`（额外搜索目录）、
-`IPASIGN_APPLE_AUTH_DLL`（核心库路径）、`IPASIGN_ZSIGN`（zsign 路径）。
-
-> 只做「签名」不需要它；只有「登录 Apple ID / 自动申请证书」需要。
-
-## 快速开始
-
-### 交互式界面（推荐）
+### Interactive UI (recommended)
 
 ```bash
 ipasign
 ```
 
-无参数启动 TUI，按数字选择操作。所有输入都在本机终端完成，密码用 `getpass` 读取，不落盘。
+The first start asks for the interface language (English or 简体中文) and remembers
+the choice; it can be changed later in **About**. Passwords and 2FA codes are read
+with `getpass` and never written to disk.
 
-### 命令行
+### Command line
 
 ```bash
-# 1. 登录一次（密码 + 验证码都在终端输入）
+# 1. sign in once (password and 2FA code are entered in the terminal)
 ipasign login --account you@example.com
 
-# 2. 申请证书 + 描述文件（Bundle ID 直接从 IPA 里读，不用自己填）
-ipasign issue --ipa 原版.ipa --udid 00008110-0011223344556677
+# 2. issue a certificate + profile (the Bundle ID is read from the IPA)
+ipasign issue --ipa app.ipa --udid 00008110-0011223344556677
 
-# 3. 签名（用申请产生的证书库条目）
-ipasign renew <条目名> 原版.ipa -o 已签名.ipa -p <p12密码>
+# 3. sign with the vault entry that was just created
+ipasign renew <entry> app.ipa -o app-signed.ipa
 
-# 4. 或直接用 p12 + 描述文件签名
-ipasign sign 原版.ipa -o 已签名.ipa -c id.p12 -m profile.mobileprovision -p <p12密码>
+# 4. or sign directly with a p12 and a profile
+ipasign sign app.ipa -o app-signed.ipa -c id.p12 -m profile.mobileprovision -p <password>
 
-# 5. 签名并安装到设备
-ipasign renew <条目名> 原版.ipa -o 已签名.ipa -p <p12密码> --install
+# 5. sign and install
+ipasign renew <entry> app.ipa -o app-signed.ipa --install
 ```
 
-## 命令参考
+## Command reference
 
-| 命令 | 作用 |
+| Command | Purpose |
 | --- | --- |
-| `ipasign` | 交互式终端界面 |
-| `ipasign tui` | 同上（显式） |
-| `ipasign login --account <Apple ID> [--fresh]` | 登录 Apple ID，换取开发者会话并列出团队 |
-| `ipasign issue --ipa <ipa>` | 从 IPA 自动读取 Bundle ID 并申请证书 / App ID / 描述文件 |
-| `ipasign issue --bundle-id <id>` | 手动指定 Bundle ID 申请 |
-| `ipasign issue ... --reuse <条目>` | 复用已有证书，只申请新描述文件（免费账号必用） |
-| `ipasign sign <ipa>` | 用指定 p12 + 描述文件重签名（`--engine zsign` 走后备引擎） |
-| `ipasign renew <条目> <ipa>` | 从证书库取身份并重签，可 `--install`（p12 密码自动读取） |
-| `ipasign install <ipa> [--udid <udid>] [--wifi]` | 安装到设备 |
-| `ipasign verify <ipa>` | 校验签名结构（CodeDirectory / CMS / 资源封印） |
-| `ipasign doctor <ipa> --vault <条目>` | 签名体检 |
-| `ipasign vault list/import/show/rm` | 证书库管理 |
-| `ipasign devices [--wifi]` | 列出已连接设备 |
-| `ipasign selfcheck` | 检查运行依赖、路径、原生库、设备 |
-| `ipasign watch add/list/rm/run/start` | 自动续签任务管理 |
-| `ipasign info <ipa>` | 查看 IPA 基本信息 |
-| `ipasign profile <file>` | 查看描述文件 |
-| `ipasign identity <p12>` | 查看证书与证书链 |
-| `ipasign fetch-certs` | 缓存 Apple WWDR 中间证书 |
+| `ipasign` | Interactive terminal UI |
+| `ipasign tui` | Same, explicitly |
+| `ipasign login --account <Apple ID> [--fresh]` | Sign in, obtain a developer session and list teams |
+| `ipasign issue --ipa <ipa>` | Read the Bundle ID from the IPA and issue certificate / App ID / profile |
+| `ipasign issue --bundle-id <id>` | Issue with an explicit Bundle ID |
+| `ipasign issue ... --reuse <entry>` | Reuse a certificate, issue only a new profile (needed on free accounts) |
+| `ipasign sign <ipa>` | Re-sign with a given p12 + profile (`--engine zsign` for the fallback) |
+| `ipasign renew <entry> <ipa>` | Take the identity from the vault and re-sign; `--install` also installs |
+| `ipasign install <ipa> [--udid <udid>] [--wifi]` | Install to a device |
+| `ipasign verify <ipa>` | Validate the signature structure (CodeDirectory / CMS / resource seal) |
+| `ipasign doctor <ipa> --vault <entry>` | Full signing check |
+| `ipasign vault list/import/show/rm` | Manage the vault |
+| `ipasign devices [--wifi]` | List connected devices |
+| `ipasign selfcheck` | Check dependencies, paths, native libraries and devices |
+| `ipasign watch add/list/rm/run/start` | Manage auto-renew jobs |
+| `ipasign info <ipa>` | Show basic IPA information |
+| `ipasign profile <file>` | Show a provisioning profile |
+| `ipasign identity <p12>` | Show a certificate and its chain |
+| `ipasign fetch-certs` | Cache Apple's WWDR intermediate certificates |
 
-## 目录结构
+Add `--lang en` / `--lang zh` to any command to pick the interface language.
+
+## Project layout
 
 ```
 ipasign/
-├── app.py              # 入口：无参数进 TUI，有参数走 CLI
-├── tui.py              # rich 终端界面
-├── cli.py              # argparse 命令
-├── device.py           # pymobiledevice3 装机（USB / Wi-Fi）
-├── watch.py            # 自动续签任务与守护循环
-├── core/               # 签名引擎（与 Apple 服务无关，可独立使用）
-│   ├── macho.py        #   Mach-O 解析与代码签名重建
-│   ├── cms.py          #   CMS/PKCS#7 签名与校验
-│   ├── der.py          #   极简 DER 编解码
-│   ├── derplist.py     #   DER 形式的 entitlements（slot 7）
-│   ├── bundle.py       #   逐层签名编排
+├── app.py              # entry point: no arguments -> TUI, arguments -> CLI
+├── tui.py              # rich terminal interface (i18n via i18n.py)
+├── i18n.py             # English + Chinese message catalog
+├── cli.py              # argparse commands
+├── paths.py            # every path is resolved here
+├── device.py           # installation through pymobiledevice3 (USB / Wi-Fi)
+├── watch.py            # auto-renew jobs and the daemon loop
+├── core/               # signing engine (no Apple services, usable standalone)
+│   ├── macho.py        #   Mach-O parsing and signature rebuilding
+│   ├── cms.py          #   CMS/PKCS#7 signing and verification
+│   ├── der.py          #   minimal DER encoder/decoder
+│   ├── derplist.py     #   entitlements as DER (slot 7)
+│   ├── bundle.py       #   layer-by-layer signing orchestration
 │   ├── resources.py    #   _CodeSignature/CodeResources
-│   ├── ipa.py          #   IPA 解包 / 打包
-│   ├── profile.py      #   描述文件解析与 entitlements 推导
-│   ├── pki.py          #   证书链、p12、WWDR
-│   ├── vault.py        #   本地证书库
-│   ├── verify.py       #   签名自检
-│   ├── doctor.py       #   体检
-│   └── errors.py       #   异常类型
-└── apple/              # 与 Apple 服务交互
-    ├── auth.py         #   GrandSlam 登录（调用原生客户端）
-    ├── developer.py    #   developerservices2（QH65B2）
-    ├── issue.py        #   证书工厂：CSR → 证书 → App ID → 描述文件
-    └── anisette/       #   设备证明（ADI）
-        ├── adi.py      #     ADI 容器解析
-        ├── native.py   #     apple_auth.dll 的 ctypes 绑定
-        └── provision.py#     自建 ADI v3（SPIM → CPIM → PTM）
+│   ├── ipa.py          #   IPA unpack / pack
+│   ├── profile.py      #   profile parsing and entitlement derivation
+│   ├── pki.py          #   chains, p12, WWDR
+│   ├── vault.py        #   local identity store
+│   ├── verify.py       #   signature self-check
+│   ├── doctor.py       #   the doctor checks
+│   └── errors.py       #   exception types
+└── apple/              # Apple service integration
+    ├── auth.py         #   GrandSlam sign-in (drives the native client)
+    ├── developer.py    #   developerservices2 (QH65B2)
+    ├── issue.py        #   certificate factory: CSR -> cert -> App ID -> profile
+    └── anisette/       #   device attestation (ADI)
+        ├── adi.py      #     ADI container parsing
+        ├── native.py   #     ctypes bindings to apple_auth.dll
+        └── provision.py#     local ADI v3 provisioning (SPIM -> CPIM -> PTM)
 ```
 
-更细的协议说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the protocol details.
 
-## 工作原理
+## How it works
 
-**签名**（`core/macho.py`）：解析 `LC_CODE_SIGNATURE`，按页计算 SHA-256，重建 CodeDirectory v0x20400，写入 requirements、XML entitlements、DER entitlements（iOS 15+）、CMS（含 Apple hash-agility 属性），最后把签名区按 16 字节对齐。签名产物与 `zsign` 逐字段一致，iOS 26 实测可安装运行。
+**Signing** (`core/macho.py`): parses `LC_CODE_SIGNATURE`, hashes every page,
+rebuilds CodeDirectory v0x20400, writes requirements, XML entitlements, DER
+entitlements (iOS 15+) and the CMS blob (including Apple's hash-agility
+attributes), then aligns the signature area to 16 bytes. The output is
+field-for-field identical to `zsign` and installs on iOS 26.
 
-**证书工厂**（`apple/issue.py`）：登录后拿到 Xcode 应用令牌，调用开发者接口：`addDevice` → `submitDevelopmentCSR` → `addAppId` → `downloadTeamProvisioningProfile`。私钥全程本地生成，只有 CSR 和公钥离开本机。
+**Certificate factory** (`apple/issue.py`): after sign-in the Xcode application
+token is used against the developer API: `addDevice` -> `submitDevelopmentCSR` ->
+`addAppId` -> `downloadTeamProvisioningProfile`. The private key never leaves the
+machine; only the CSR and the public key are sent.
 
-**设备证明**（`apple/anisette/`）：向 Apple 申请 SPIM → 用本机硬件指纹生成 CPIM → 换取 PTM/信任密钥 → 落地 `adi.pb`。之后每次请求用它生成 `X-Apple-I-MD` 一次性口令。
+**Device attestation** (`apple/anisette/`): requests SPIM from Apple, derives
+CPIM from local hardware fingerprints, exchanges it for PTM/trust keys and
+stores `adi.pb`; each later request uses it to compute the one-time
+`X-Apple-I-MD` header.
 
-## 引擎选择
+## Engines
 
-默认使用自研的 `native` 引擎（纯 Python，逐字段与 zsign 对齐，已在 iOS 26 真机验证）。需要时也可以调用外部 zsign：
+The default `native` engine is pure Python, matches zsign field by field and is
+verified on real iOS 26 hardware. An external zsign binary can be used instead:
 
 ```bash
 ipasign sign app.ipa -o out.ipa -c id.p12 -m profile.mobileprovision --engine zsign
-ipasign renew <条目> app.ipa -o out.ipa -p <密码> --engine zsign --install
+ipasign renew <entry> app.ipa -o out.ipa --engine zsign --install
 ```
 
-zsign 是独立的 GPLv3 程序，**本项目不打包它**：自行下载后设置 `IPASIGN_ZSIGN` 指向可执行文件即可。
+zsign is a separate GPLv3 program and is **not bundled**: download it and point
+`IPASIGN_ZSIGN` at the executable.
 
-## 已验证
+## Verified
 
-下列开源 App 用本工具（
-ative 引擎）重签后，在 iOS 26.5 的 iPad 上实测安装成功：
+The following open-source apps were re-signed with the native engine and
+installed successfully on an iPad running iOS 26.5:
 
-| App | 结构特点 |
+| App | Structural trait |
 | --- | --- |
-| [Dolphin iOS](https://github.com/OatmealDome/dolphin-ios) | 多架构（fat）framework + 独立 dylib |
-| [SideStore](https://github.com/SideStore/SideStore) | framework + App Extension（widget） |
-| [iNDS](https://github.com/iNDS-Team/iNDS) | 主程序为 arm + arm64 多架构 |
-| [Termoso](https://github.com/termoso/termoso) | 完全未签名（无 LC_CODE_SIGNATURE） |
+| [Dolphin iOS](https://github.com/OatmealDome/dolphin-ios) | fat frameworks plus a loose dylib |
+| [SideStore](https://github.com/SideStore/SideStore) | framework plus an app extension |
+| [iNDS](https://github.com/iNDS-Team/iNDS) | main binary is arm + arm64 |
+| [Termoso](https://github.com/termoso/termoso) | completely unsigned (no `LC_CODE_SIGNATURE`) |
 
-## 使用须知
+## Notes
 
-- **免费 Apple ID**：证书同时只能有 **1 张**（`maxActive: 1`），描述文件 **7 天**到期。换 App 时用 `--reuse` 复用证书，只重新拉描述文件。
-- **自动复用**：同一个 Bundle ID 重复签时，工具会复用已有的 App ID 和证书（不会重复创建、不消耗配额）；Apple 报「证书名额已满」时会自动回退到证书库里的证书。
-- **开发者模式**：iOS 16+ 首次运行开发签名的 App，需要在 `设置 → 隐私与安全性 → 开发者模式` 打开并重启。
-- **信任证书**：首次安装后在 `设置 → 通用 → VPN与设备管理` 里信任你的开发者证书。
-- **Wi-Fi 安装**：先用数据线连一次，在 iTunes（Windows）/ Finder（macOS）里勾选「通过 Wi-Fi 同步」，之后 ipasign devices --wifi 能看到设备，ipasign install --wifi 就能无线安装。
-- **自动续签**：ipasign watch add app.ipa --vault <条目> --udid <UDID>，之后 ipasign watch run（检查一次）或 ipasign watch start（前台守护循环；要常驻请用 Windows 任务计划程序 / systemd timer / cron 定时调 watch run）。任务存在 `<数据目录>/renewals.json`，**默认不保存 p12 密码**（运行时提示；加 --save-password 才会明文保存）。
-- **限流**：Apple 对登录和证书申请有频率限制，HTTP 503 时等 30–60 分钟或换网络。
-- **只签你有权处理的 App**：本工具不绕过 App Store 的 DRM，也不为盗版内容提供便利。
+- **Free Apple IDs** allow **one** active certificate (`maxActive: 1`) and
+  profiles expire after **7 days**. Use `--reuse` to keep the certificate and
+  only fetch a new profile when switching apps.
+- **Automatic reuse**: signing the same Bundle ID again reuses the existing App
+  ID and certificate; if Apple reports the certificate limit, the tool falls
+  back to the certificate already in the vault.
+- **Developer Mode**: iOS 16+ requires `Settings > Privacy & Security >
+  Developer Mode` to be enabled once, followed by a reboot.
+- **Trusting the certificate**: after the first install, trust your development
+  certificate in `Settings > General > VPN & Device Management`.
+- **Wi-Fi installation**: connect once over USB, enable *Sync over Wi-Fi* in
+  iTunes/Finder, then `ipasign devices --wifi` and `ipasign install --wifi`.
+- **Auto-renew**: `ipasign watch add app.ipa --vault <entry> --udid <UDID>`,
+  then `ipasign watch run` (one check) or `ipasign watch start` (foreground
+  daemon; use Task Scheduler / systemd timer / cron for something permanent).
+  Jobs live in `<data dir>/renewals.json`; the p12 password is not stored unless
+  `--save-password` is given.
+- **Rate limits**: Apple throttles sign-ins and certificate requests; on HTTP
+  503 wait 30-60 minutes or switch networks.
+- **Only sign what you are allowed to**: this tool does not bypass App Store
+  DRM and is not meant to facilitate piracy.
 
-## 安全与隐私
+## Security and privacy
 
-- Apple ID 密码只在本地 `getpass` 中读取，**不写入磁盘、不记录日志**。
-- 落盘的只有：`adi.pb`（设备身份）、`account-session.plist`（登录会话）、证书库里的 p12 与描述文件。
-- 所有配置在 **项目目录下的 `.ipasign/`**（源码目录运行时），删除该目录即可完全重置。
-  用 pip 安装到 site-packages 时没有项目目录可用，则回落到 `~/.ipasign/`；
-  也可以用环境变量 `IPASIGN_HOME` 指定任意位置。签名解包等临时文件都在
-  `<数据目录>/tmp/` 下，签完自动清理。
-- 工具自己签发的证书条目，其 p12 密码是**自动生成的随机值**，保存在 `<数据目录>/identities/<条目>/meta.json`（本机明文，只有本用户可读）。这样签名时无需再输入。
-- 你**导入**的 p12 不会被记录密码，使用时仍需提供。
+- The Apple ID password is read with `getpass` and is **never written to disk or
+  logged**.
+- Only these files are written: `adi.pb` (device identity),
+  `account-session.plist` (session), and the p12/profile pairs in the vault.
+- Configuration lives in **`<project>/.ipasign/`** when running from a source
+  checkout, and in `~/.ipasign/` for a pip-installed copy. Override with
+  `IPASIGN_HOME`. Temporary unpacking happens in `<data dir>/tmp/` and is
+  cleaned up automatically.
+- The p12 password for factory-issued identities is a generated random value
+  stored in `<data dir>/identities/<entry>/meta.json` (plain text, readable by
+  the current user only), so signing needs no prompt.
+- Imported p12 files never have their password recorded.
 
-## 开发
+## Development
 
 ```bash
 pip install -e ".[all]"
-pytest            # 62 个测试
+pytest
 ```
 
-签名引擎与 Apple 服务层解耦：`ipasign.core` 不依赖网络，可单独用于批量签名。
+The signing engine is decoupled from Apple services: `ipasign.core` does not
+touch the network and can be used standalone for batch signing.
 
-## 许可证
+## License
 
-MIT。
+MIT.

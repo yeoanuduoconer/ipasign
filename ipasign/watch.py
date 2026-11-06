@@ -78,7 +78,7 @@ class Job:
         return source.with_name(source.stem + "-renewed.ipa")
 
     def describe(self) -> str:
-        device = self.udid or "自动选择"
+        device = self.udid or "auto"
         transport = "Wi-Fi" if self.wifi else "USB"
         return f"{self.id}: {Path(self.ipa).name} [{self.vault}] -> {device} ({transport})"
 
@@ -126,7 +126,7 @@ def add_job(
 ) -> Job:
     source = Path(ipa)
     if not source.is_file():
-        raise IpasignError(f"找不到 IPA: {source}")
+        raise IpasignError(f"IPA not found: {source}")
     vault.load(vault_name)  # fail early when the entry does not exist
     job = Job(
         id=job_id or uuid.uuid4().hex[:8],
@@ -204,7 +204,7 @@ def _password_for(job: Job) -> str:
         return stored
     if job.vault in _PASSWORD_CACHE:
         return _PASSWORD_CACHE[job.vault]
-    value = getpass.getpass(f"证书 {job.vault} 的 p12 密码: ")
+    value = getpass.getpass(f"p12 password for {job.vault}: ")
     _PASSWORD_CACHE[job.vault] = value
     return value
 
@@ -229,17 +229,17 @@ def renew_job(
     entry = vault.load(job.vault)
     expiry = _parse_time(entry.meta.get("profile_expires"))
     if not force and not needs_renewal(expiry, threshold_hours):
-        log(f"[..] {job.id}: 描述文件 {expiry.date()} 到期，暂不需要续签")
+        log(f"[..] {job.id}: profile expires {expiry.date()}, no renewal needed yet")
         return "skipped"
 
     password = _password_for(job)
     bundle_id = bundle_id_of(entry)
     if not bundle_id:
-        raise RuntimeError(f"{job.vault} 缺少 profile_app_id，无法确定 Bundle ID")
+        raise RuntimeError(f"{job.vault} has no profile_app_id; cannot determine the Bundle ID")
 
     from ipasign.apple.issue import issue
 
-    log(f"[..] {job.id}: 重新申请描述文件 ({bundle_id})")
+    log(f"[..] {job.id}: requesting a new profile ({bundle_id})")
     issue(
         bundle_id=bundle_id,
         app_name=bundle_id,
@@ -255,13 +255,13 @@ def renew_job(
         ProvisioningProfile.load(entry.profile_path) if entry.profile_path else None
     )
     output = job.output_path()
-    log(f"[..] {job.id}: 重新签名 -> {output.name}")
+    log(f"[..] {job.id}: re-signing -> {output.name}")
     sign_ipa(job.ipa, output, identity=identity, profile=profile, log=log)
 
     if job.udid:
         from ipasign.device import install_ipa
 
-        log(f"[..] {job.id}: 安装到 {job.udid}")
+        log(f"[..] {job.id}: installing to {job.udid}")
         install_ipa(output, udid=job.udid, wifi=job.wifi, log=log)
 
     job.last_run = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
@@ -286,7 +286,7 @@ def run_once(
             job.last_error = str(error)[:400]
             job.last_run = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
             results[job.id] = f"failed: {error}"
-            log(f"[错误] {job.id}: {error}")
+            log(f"[error] {job.id}: {error}")
     if jobs:
         save_jobs(jobs)
     return results
@@ -300,14 +300,14 @@ def run_forever(
 ) -> None:
     """Timer loop for the daemon; Ctrl+C stops it."""
     interval = max(1.0, float(interval_minutes))
-    log(f"[..] 自动续签已启动，每 {interval:g} 分钟检查一次（Ctrl+C 停止）")
+    log(f"[..] Auto-renew started; checking every {interval:g} minutes (Ctrl+C stops it)")
     try:
         while True:
             results = run_once(threshold_hours=threshold_hours, log=log)
             if not results:
-                log("[..] 还没有添加任何任务，用 `ipasign watch add` 添加")
+                log("[..] No jobs yet; add one with `ipasign watch add`")
             next_at = dt.datetime.now() + dt.timedelta(minutes=interval)
-            log(f"[..] 下次检查: {next_at:%H:%M:%S}")
+            log(f"[..] Next check: {next_at:%H:%M:%S}")
             time.sleep(interval * 60)
     except KeyboardInterrupt:
-        log("[..] 已停止自动续签")
+        log("[..] Auto-renew stopped")

@@ -57,7 +57,7 @@ def _load_identity(
         identity = load_identity(p12, password, extra)
     except IpasignError as exc:
         if password is None and "password" in str(exc).lower():
-            password = getpass.getpass("p12 密码: ")
+            password = getpass.getpass("p12 password: ")
             identity = load_identity(p12, password, extra)
         else:
             raise
@@ -136,34 +136,34 @@ def _collect_info(contents: ipa.IpaContents) -> dict:
 
 
 def _print_info(info: dict) -> None:
-    print(f"应用        : {info['app']}")
+    print(f"App         : {info['app']}")
     print(f"Bundle ID   : {info['bundle_id']}")
-    print(f"名称/版本   : {info['name']} / {info['version']} ({info['build']})")
-    print(f"最低系统    : {info['minimum_os']}")
-    print(f"主程序      : {info['executable']} [{', '.join(info['architectures']) or '未知'}]")
+    print(f"Name/Version: {info['name']} / {info['version']} ({info['build']})")
+    print(f"Min OS      : {info['minimum_os']}")
+    print(f"Executable  : {info['executable']} [{', '.join(info['architectures']) or 'unknown'}]")
     if info.get("encrypted"):
-        print("加密状态    : 已加密（App Store DRM，重签后无法直接运行）")
+        print("Encrypted   : yes (App Store DRM; it will not run after re-signing)")
     size = info["payload_size"]
     size_text = f"{size / 1024 / 1024:.1f} MB" if size >= 1024 * 1024 else f"{size / 1024:.0f} KB"
-    print(f"大小        : {size_text}")
+    print(f"Size        : {size_text}")
     if info["signature"]:
         signature = info["signature"]
         print(
-            f"签名        : {signature['identifier']} "
-            f"(team {signature['team_id'] or '未知'}, "
+            f"Signature   : {signature['identifier']} "
+            f"(team {signature['team_id'] or 'unknown'}, "
             f"{'CMS' if signature['cms'] else 'ad-hoc'})"
         )
     else:
-        print("签名        : 未签名")
+        print("Signature   : unsigned")
     if info["nested"]:
-        print("嵌套组件    :")
+        print("Nested      :")
         for item in info["nested"]:
             print(f"  - {item['path']} ({item['type']})")
     profile = info["profile"]
     if profile and "error" not in profile:
         print(
-            f"描述文件    : {profile['name']} / {profile['application_identifier']} / "
-            f"{'已过期' if profile['expired'] else '有效期至 ' + str(profile['expires'])[:10]}"
+            f"Profile     : {profile['name']} / {profile['application_identifier']} / "
+            f"{'expired' if profile['expired'] else 'valid until ' + str(profile['expires'])[:10]}"
         )
 
 
@@ -175,12 +175,14 @@ def cmd_sign(args: argparse.Namespace) -> int:
     log = _log_factory(args.quiet, args.verbose)
     input_ipa = Path(args.input)
     if not input_ipa.is_file():
-        raise IpasignError(f"找不到 IPA 文件: {input_ipa}")
+        raise IpasignError(f"IPA file not found: {input_ipa}")
     output_ipa = Path(args.output) if args.output else input_ipa.with_name(
         f"{input_ipa.stem}-signed.ipa"
     )
     if output_ipa.exists() and not args.force:
-        raise IpasignError(f"输出文件已存在: {output_ipa}（加 --force 覆盖）")
+        raise IpasignError(
+            f"output file already exists: {output_ipa} (add --force to overwrite)"
+        )
 
 
     profile = None
@@ -198,16 +200,16 @@ def cmd_sign(args: argparse.Namespace) -> int:
             bundle_id=args.bundle_id or bundle_id_for_profile(zsign_profile),
             log=log,
         )
-        print(f"[完成] {output_ipa}（zsign 引擎）")
+        print(f"[done] {output_ipa} (zsign engine)")
         return 0
 
     if not args.adhoc:
         if not args.p12:
-            raise IpasignError("需要 -c/--p12 指定签名证书")
+            raise IpasignError("a signing certificate is required: pass -c/--p12")
         if not args.profile:
-            raise IpasignError("需要 -m/--profile 指定描述文件")
+            raise IpasignError("a provisioning profile is required: pass -m/--profile")
         profile = ProvisioningProfile.load(args.profile)
-        log(f"描述文件: {profile.name} ({profile.application_identifier})")
+        log(f"Profile: {profile.name} ({profile.application_identifier})")
         identity = _load_identity(
             args.p12,
             args.password,
@@ -215,9 +217,9 @@ def cmd_sign(args: argparse.Namespace) -> int:
             allow_download=not args.no_download,
             log=log,
         )
-        log(f"签名证书: {identity.common_name} (team {identity.team_id})")
+        log(f"Signing certificate: {identity.common_name} (team {identity.team_id})")
         if len(identity.certificates) < 2:
-            log("提示: 证书链中没有中间证书，iOS 可能拒绝安装")
+            log("Hint: the chain has no intermediate certificate; iOS may reject the install")
 
     options = SignOptions(
         bundle_id=args.bundle_id,
@@ -253,20 +255,20 @@ def cmd_sign(args: argparse.Namespace) -> int:
         )
         return 0
 
-    print(f"[完成] 已输出: {output_ipa}")
+    print(f"[done] Wrote: {output_ipa}")
     print(f"  Bundle ID : {report.bundle_id}")
-    print(f"  Team ID   : {report.team_id or '未知'}")
-    print(f"  描述文件  : {report.profile_name or '无（ad-hoc）'}")
-    print(f"  已签名    : {len(report.steps)} 个 Mach-O 文件")
+    print(f"  Team ID   : {report.team_id or 'unknown'}")
+    print(f"  Profile   : {report.profile_name or 'none (ad-hoc)'}")
+    print(f"  Signed    : {len(report.steps)} Mach-O files")
     for warning in report.warnings:
-        print(f"  [警告] {warning}")
+        print(f"  [warning] {warning}")
     return 0
 
 
 def cmd_info(args: argparse.Namespace) -> int:
     input_ipa = Path(args.input)
     if not input_ipa.is_file():
-        raise IpasignError(f"找不到 IPA 文件: {input_ipa}")
+        raise IpasignError(f"IPA file not found: {input_ipa}")
     workdir, contents = _open_ipa(input_ipa)
     try:
         info = _collect_info(contents)
@@ -304,10 +306,10 @@ def cmd_verify(args: argparse.Namespace) -> int:
         )
         return 0 if report.ok else 1
 
-    print(f"校验: {args.input}")
+    print(f"Verify: {args.input}")
     for check in report.checks:
         status = "OK " if not check.problems else "ERR"
-        cms = "CMS" if check.cms_ok else "无CMS"
+        cms = "CMS" if check.cms_ok else "no CMS"
         print(
             f"  [{status}] {check.path:45} {check.identifier or '-':40} "
             f"{','.join(check.architectures) or '-':10} {cms}"
@@ -316,16 +318,16 @@ def cmd_verify(args: argparse.Namespace) -> int:
             print(f"        - {problem}")
     problems = report.all_problems()
     if problems:
-        print(f"结果: 发现 {len(problems)} 个问题")
+        print(f"Result: {len(problems)} problem(s) found")
         return 1
-    print("结果: 签名结构校验通过")
+    print("Result: signature structure verified")
     return 0
 
 
 def cmd_devices(args: argparse.Namespace) -> int:
     if not device.library_available():
         raise IpasignError(
-            "缺少 pymobiledevice3，无法与手机通信。安装：\n"
+            "pymobiledevice3 is missing; cannot talk to the phone. Install it with:\n"
             "  python -m pip install pymobiledevice3"
         )
     devices = device.list_devices(wifi=True if getattr(args, "wifi", False) else None)
@@ -334,18 +336,21 @@ def cmd_devices(args: argparse.Namespace) -> int:
         return 0 if devices else 1
     if not devices:
         if getattr(args, "wifi", False):
-            print("没有发现 Wi-Fi 设备。请先用数据线连一次，在 iTunes/Finder 里勾选「通过 Wi-Fi 同步」。")
+            print(
+                "No Wi-Fi device found. Connect the cable once and enable "
+                "'Sync over Wi-Fi' in iTunes/Finder."
+            )
             return 1
-        print("没有检测到设备。请确认：")
-        print("  1) 手机用数据线连上电脑；")
-        print("  2) 手机解锁，并在弹窗里点「信任」；")
-        print("  3) iTunes / Apple Devices 已安装（提供 Apple Mobile Device Service）。")
+        print("No device detected. Please make sure:")
+        print("  1) the phone is connected to the computer with a cable;")
+        print("  2) the phone is unlocked and you tapped Trust in the prompt;")
+        print("  3) iTunes / Apple Devices is installed (it provides the Apple Mobile Device Service).")
         return 1
     for item in devices:
-        marker = "" if item.paired else "  [未配对]"
+        marker = "" if item.paired else "  [unpaired]"
         print(f"{item.udid}  {item.label()}  [{item.transport}]{marker}")
         if item.extra.get("pairing_error"):
-            print(f"    配对失败: {item.extra['pairing_error'][:160]}")
+            print(f"    Pairing failed: {item.extra['pairing_error'][:160]}")
     return 0
 
 
@@ -353,15 +358,17 @@ def cmd_install(args: argparse.Namespace) -> int:
     log = _log_factory(False, args.verbose)
     ipa_path = Path(args.ipa)
     if not ipa_path.is_file():
-        raise IpasignError(f"找不到 IPA 文件: {ipa_path}")
+        raise IpasignError(f"IPA file not found: {ipa_path}")
 
     if args.verify:
-        log("安装前校验签名 ...")
+        log("Verifying the signature before install ...")
         report = verify_ipa(ipa_path)
         if not report.ok:
             for problem in report.all_problems()[:10]:
-                print(f"  [问题] {problem}")
-            raise IpasignError("签名校验未通过，已中止安装（加 --no-verify 可跳过）")
+                print(f"  [problem] {problem}")
+            raise IpasignError(
+                "signature verification failed; install aborted (add --no-verify to skip)"
+            )
 
     udid = device.install_ipa(
         ipa_path,
@@ -370,8 +377,11 @@ def cmd_install(args: argparse.Namespace) -> int:
         wifi=getattr(args, "wifi", False),
         log=log,
     )
-    print(f"[完成] 已安装到设备 {udid}")
-    print("如果图标是灰色的，去 设置 → 通用 → VPN与设备管理 里信任对应证书。")
+    print(f"[done] Installed on device {udid}")
+    print(
+        "If the icon is greyed out, trust the certificate in Settings → General → "
+        "VPN & Device Management."
+    )
     return 0
 
 
@@ -383,8 +393,8 @@ def cmd_vault(args: argparse.Namespace) -> int:
             print(json.dumps([item.meta for item in items], ensure_ascii=False, indent=2))
             return 0
         if not items:
-            print("证书库是空的。先导入一个：")
-            print("  ipasign vault import <名字> cert.p12 -m profile.mobileprovision -p 密码")
+            print("The vault is empty. Import one first:")
+            print("  ipasign vault import <name> cert.p12 -m profile.mobileprovision -p <password>")
             return 0
         for item in items:
             print(f"{item.name:20} {item.summary()}")
@@ -394,19 +404,19 @@ def cmd_vault(args: argparse.Namespace) -> int:
         stored = vault.save(
             args.name, args.p12, args.profile, args.password, overwrite=args.force
         )
-        print(f"[完成] 已存入证书库: {stored.name}")
+        print(f"[done] Stored in the vault: {stored.name}")
         print(f"  p12     : {stored.p12_path}")
         if stored.profile_path:
-            print(f"  描述文件: {stored.profile_path}")
-        print(f"  Team    : {stored.meta.get('team_id') or '未知'}")
-        print(f"  有效期  : {str(stored.meta.get('profile_expires') or stored.meta.get('leaf_expires'))[:10]}")
+            print(f"  Profile : {stored.profile_path}")
+        print(f"  Team    : {stored.meta.get('team_id') or 'unknown'}")
+        print(f"  Expires : {str(stored.meta.get('profile_expires') or stored.meta.get('leaf_expires'))[:10]}")
         return 0
 
     if action == "show":
         item = vault.load(args.name)
         password = args.password or vault.password_of(item)
         if not password:
-            password = getpass.getpass("p12 密码: ")
+            password = getpass.getpass("p12 password: ")
         identity = load_identity(item.p12_path, password)
         profile = (
             ProvisioningProfile.load(item.profile_path) if item.profile_path else None
@@ -423,7 +433,7 @@ def cmd_vault(args: argparse.Namespace) -> int:
             }
             print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
             return 0
-        print(f"证书库条目: {item.name}")
+        print(f"Vault entry: {item.name}")
         for key, value in item.meta.items():
             print(f"  {key:18}: {value}")
         for check in checks:
@@ -432,9 +442,9 @@ def cmd_vault(args: argparse.Namespace) -> int:
 
     if action == "rm":
         vault.remove(args.name)
-        print(f"[完成] 已从证书库删除 {args.name}")
+        print(f"[done] Removed {args.name} from the vault")
         return 0
-    raise IpasignError("未知的 vault 操作")
+    raise IpasignError("unknown vault action")
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -444,7 +454,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         item = vault.load(args.vault)
         password = args.password or vault.password_of(item)
         if not password:
-            password = getpass.getpass("p12 密码: ")
+            password = getpass.getpass("p12 password: ")
         identity = load_identity(item.p12_path, password)
         identity = ensure_chain(identity, allow_download=False, log=lambda m: None)
         if item.profile_path:
@@ -467,7 +477,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         return 0 if doctor_mod.all_ok(checks) else 1
     for check in checks:
         print(check.line())
-    print("结果: " + ("全部通过" if doctor_mod.all_ok(checks) else "有问题，先修上面的 FAIL 项"))
+    print(
+        "Result: "
+        + ("all checks passed" if doctor_mod.all_ok(checks) else "problems found; fix the FAIL items above")
+    )
     return 0 if doctor_mod.all_ok(checks) else 1
 
 
@@ -475,16 +488,19 @@ def cmd_renew(args: argparse.Namespace) -> int:
     log = _log_factory(False, args.verbose)
     item = vault.load(args.name)
     if item.profile_path is None:
-        raise IpasignError(f"证书 {item.name!r} 没有配套描述文件，无法续签")
+        raise IpasignError(
+            f"certificate {item.name!r} has no provisioning profile; cannot renew"
+        )
     password = args.password or vault.password_of(item)
     if not password:
-        password = getpass.getpass("p12 密码: ")
+        password = getpass.getpass("p12 password: ")
     identity = load_identity(item.p12_path, password)
     identity = ensure_chain(identity, allow_download=True, log=log)
     profile = ProvisioningProfile.load(item.profile_path)
     if profile.is_expired():
         raise IpasignError(
-            f"描述文件已于 {profile.expiration:%Y-%m-%d} 过期，需要重新生成后再续签"
+            f"the profile expired on {profile.expiration:%Y-%m-%d}; "
+            "regenerate it before renewing"
         )
     output = Path(args.output) if args.output else Path(args.ipa).with_name(
         f"{Path(args.ipa).stem}-renewed.ipa"
@@ -503,21 +519,23 @@ def cmd_renew(args: argparse.Namespace) -> int:
             bundle_id=args.bundle_id or bundle_id_for_profile(profile),
             log=log,
         )
-        print(f"[完成] {output}（zsign 引擎，到期 {profile.expiration:%Y-%m-%d}）")
+        print(
+            f"[done] {output} (zsign engine, expires {profile.expiration:%Y-%m-%d})"
+        )
         if args.install:
-            log("安装到设备 ...")
+            log("Installing to the device ...")
             udid = device.install_ipa(output, udid=args.udid, log=log)
-            print(f"[完成] 已安装到 {udid}")
+            print(f"[done] Installed on {udid}")
         return 0
     report = bundle.sign_ipa(
         args.ipa, output, identity=identity, profile=profile,
         options=SignOptions(bundle_id=args.bundle_id), log=log,
     )
-    print(f"[完成] {output}  ({report.bundle_id}, 到期 {profile.expiration:%Y-%m-%d})")
+    print(f"[done] {output}  ({report.bundle_id}, expires {profile.expiration:%Y-%m-%d})")
     if args.install:
-        log("安装到设备 ...")
+        log("Installing to the device ...")
         udid = device.install_ipa(output, udid=args.udid, log=log)
-        print(f"[完成] 已安装到 {udid}")
+        print(f"[done] Installed on {udid}")
     return 0
 
 
@@ -530,17 +548,17 @@ def cmd_profile(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, ensure_ascii=False, indent=2, default=str))
         return 0
-    print(f"名称        : {data['name']}")
+    print(f"Name        : {data['name']}")
     print(f"UUID        : {data['uuid']}")
     print(f"Team        : {', '.join(data['team_ids']) or '-'}")
-    print(f"App ID      : {data['application_identifier']} ({'通配' if data['wildcard'] else '显式'})")
-    print(f"到期时间    : {data['expires'] or '-'} {'[已过期]' if data['expired'] else ''}")
-    print(f"设备数量    : {data['device_count']}")
-    print(f"平台        : {', '.join(data['platforms'])}")
-    print(f"证书数量    : {data['certificate_count']}")
+    print(f"App ID      : {data['application_identifier']} ({'wildcard' if data['wildcard'] else 'explicit'})")
+    print(f"Expires     : {data['expires'] or '-'} {'[expired]' if data['expired'] else ''}")
+    print(f"Devices     : {data['device_count']}")
+    print(f"Platforms   : {', '.join(data['platforms'])}")
+    print(f"Certificates: {data['certificate_count']}")
     for subject in data["certificates"]:
         print(f"  - {subject}")
-    print("权限        : " + ", ".join(data["entitlements"]))
+    print("Entitlements: " + ", ".join(data["entitlements"]))
     return 0
 
 
@@ -557,16 +575,19 @@ def cmd_identity(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, ensure_ascii=False, indent=2, default=str))
         return 0
-    print(f"证书        : {data['common_name']}")
+    print(f"Certificate : {data['common_name']}")
     print(f"Team        : {data['team_id']}")
-    print(f"有效期      : {data['not_before'][:10]} ~ {data['not_after'][:10]}")
+    print(f"Validity    : {data['not_before'][:10]} ~ {data['not_after'][:10]}")
     print(f"SHA256      : {data['sha256']}")
-    print("证书链      :")
+    print("Chain       :")
     for item in data["chain"]:
-        marker = " (已过期)" if item["expired"] else ""
+        marker = " (expired)" if item["expired"] else ""
         print(f"  [{item['index']}] {item['role']:12} {item['subject']}{marker}")
     if len(data["chain"]) < 2:
-        print("提示: 缺少中间证书，iOS 会拒绝安装；可运行 `ipasign fetch-certs`")
+        print(
+            "Hint: the intermediate certificate is missing; iOS will reject the install. "
+            "Run `ipasign fetch-certs`"
+        )
     return 0
 
 
@@ -577,50 +598,52 @@ def cmd_login(args: argparse.Namespace) -> int:
     try:
         library = apple_auth_bridge.library_path()
     except apple_auth_bridge.AppleAuthUnavailable as exc:
-        print(f"[错误] {exc}", file=sys.stderr)
+        print(f"[error] {exc}", file=sys.stderr)
         return 1
 
-    print(f"[..] 原生客户端: {library}")
-    print(f"[..] 设备身份目录: {apple_auth_bridge.STATE_DIR}")
+    print(f"[..] Native client: {library}")
+    print(f"[..] Device identity dir: {apple_auth_bridge.STATE_DIR}")
     try:
         device = apple_auth_bridge.open_device()
         session = None if args.fresh else device.session
         if session is not None:
-            print("[..] 复用已保存的登录会话（--fresh 可强制重新登录）")
+            print("[..] Reusing the saved sign-in session (--fresh forces a new sign-in)")
         else:
-            print("     首次使用会自动申请 ADI（需要几秒）")
+            print("     The first run provisions ADI automatically (takes a few seconds)")
             device, session = apple_auth_bridge.login(args.account, args.password)
     except Exception as exc:  # noqa: BLE001 - native errors
         message = str(exc)
         if "503" in message:
             print(
-                "[错误] Apple 限流（HTTP 503）：这个 IP 短时间内请求太多。\n"
-                "       等 30-60 分钟再试，或换网络（手机热点 / 代理节点）立刻解除。",
+                "[error] Apple rate limit (HTTP 503): too many requests from this IP in a "
+                "short time.\n"
+                "        Wait 30-60 minutes, or switch networks (phone hotspot / proxy) "
+                "to clear it immediately.",
                 file=sys.stderr,
             )
         elif "-22406" in message or "-20101" in message or "-20102" in message:
-            print("[错误] 账号或密码不正确。", file=sys.stderr)
+            print("[error] Incorrect Apple ID or password.", file=sys.stderr)
         else:
-            print(f"[错误] 登录失败: {message}", file=sys.stderr)
+            print(f"[error] Sign-in failed: {message}", file=sys.stderr)
         return 1
 
-    print("[完成] 登录成功")
+    print("[done] Signed in")
     try:
         headers = apple_auth_bridge.developer_headers(device, session)
     except Exception as exc:  # noqa: BLE001
-        print(f"[错误] 无法取得开发者会话: {exc}", file=sys.stderr)
+        print(f"[error] Cannot obtain a developer session: {exc}", file=sys.stderr)
         return 1
 
     teams = _fetch_developer_teams(headers)
     if teams:
-        print("[完成] 开发者团队:")
+        print("[done] Developer teams:")
         for team in teams:
             print(
                 f"  {team.get('name', '?')}  teamId={team.get('teamId', '?')}  "
                 f"type={team.get('type', '?')}"
             )
     else:
-        print("[!] 未取到团队列表（账号可能还没加入开发者计划）")
+        print("[!] No team list returned (the account may not have joined the Developer Program)")
     return 0
 
 
@@ -662,14 +685,16 @@ def cmd_issue(args: argparse.Namespace) -> int:
     app_name = args.app_name
     if not bundle_id:
         if not args.ipa:
-            raise IpasignError("请用 --bundle-id 指定 Bundle ID，或用 --ipa 从 IPA 自动读取")
+            raise IpasignError(
+                "pass --bundle-id, or --ipa to read the Bundle ID from an IPA"
+            )
         from ipasign.core.doctor import ipa_bundle_info
 
         info = ipa_bundle_info(args.ipa)
         bundle_id = info["bundle_id"]
         if not app_name:
             app_name = info["name"] or bundle_id.rsplit(".", 1)[-1]
-        print(f"[..] 从 IPA 识别: {app_name}  {bundle_id}")
+        print(f"[..] Detected from the IPA: {app_name}  {bundle_id}")
     if not app_name:
         app_name = "ipasign app"
 
@@ -684,14 +709,14 @@ def cmd_issue(args: argparse.Namespace) -> int:
             allow_revoke=args.revoke_old,
         )
     except Exception as exc:  # noqa: BLE001 - remote + native errors
-        print(f"[错误] 签发失败: {exc}", file=sys.stderr)
+        print(f"[error] Issuing failed: {exc}", file=sys.stderr)
         return 1
     print(f"  Team       : {result['team_id']}")
-    print(f"  证书 ID    : {result['certificate_id']}")
+    print(f"  Cert ID    : {result['certificate_id']}")
     print(f"  App ID     : {result['app_id_id']} ({result['bundle_id']})")
-    print(f"  描述文件   : {result['profile_app_id']}")
-    print(f"  证书库条目 : {result['name']}")
-    print("  p12 密码   : 已自动生成并保存在证书库，签名时自动使用")
+    print(f"  Profile    : {result['profile_app_id']}")
+    print(f"  Vault entry: {result['name']}")
+    print("  Password   : generated and stored in the vault; used automatically when signing")
     return 0
 
 
@@ -716,35 +741,35 @@ def cmd_watch(args: argparse.Namespace) -> int:
             interval_hours=args.interval_hours,
             job_id=args.id,
         )
-        print(f"[完成] 已添加续签任务 {job.id}")
+        print(f"[done] Renewal job added: {job.id}")
         print(f"  {job.describe()}")
-        print(f"  输出: {job.output_path()}")
+        print(f"  Output: {job.output_path()}")
         if args.password and not args.save_password:
-            print("  提示: 未保存密码，watch run/start 时会询问")
+            print("  Hint: password not stored; watch run/start will prompt for it")
         return 0
     if action == "list":
         jobs = watch.load_jobs()
         if not jobs:
-            print("还没有续签任务。用 ipasign watch add <ipa> --vault <条目> 添加。")
+            print("No renewal jobs yet. Add one with `ipasign watch add <ipa> --vault <entry>`.")
             return 0
         for job in jobs:
             print(f"{job.describe()}")
-            print(f"    上次: {job.last_run or '-'}  结果: {job.last_result or '-'}")
+            print(f"    Last run: {job.last_run or '-'}  Result: {job.last_result or '-'}")
             if job.last_error:
-                print(f"    错误: {job.last_error[:120]}")
+                print(f"    Error: {job.last_error[:120]}")
         return 0
     if action == "rm":
         if watch.remove_job(args.id):
-            print(f"[完成] 已删除 {args.id}")
+            print(f"[done] Deleted {args.id}")
             return 0
-        print(f"[错误] 没有找到任务 {args.id}", file=sys.stderr)
+        print(f"[error] No such job: {args.id}", file=sys.stderr)
         return 1
     if action == "run":
         results = watch.run_once(
             threshold_hours=args.threshold_hours, force=args.force, log=_log_factory(False, False)
         )
         if not results:
-            print("还没有续签任务。")
+            print("No renewal jobs yet.")
             return 0
         for job_id, result in results.items():
             print(f"  {job_id}: {result}")
@@ -756,48 +781,48 @@ def cmd_watch(args: argparse.Namespace) -> int:
             log=_log_factory(False, False),
         )
         return 0
-    raise IpasignError(f"未知操作: {action}")
+    raise IpasignError(f"unknown action: {action}")
 
 
 def cmd_selfcheck(args: argparse.Namespace) -> int:
     """Print what this build can do and where it looks for things."""
     from . import paths
 
-    print(f"版本        : {__version__}")
-    print(f"运行方式    : {'单文件可执行' if paths.frozen() else '源码 / pip 安装'}")
-    print(f"数据目录    : {paths.data_dir()}")
-    print(f"平台        : {paths.platform_tag()}")
+    print(f"Version     : {__version__}")
+    print(f"Mode        : {'single-file executable' if paths.frozen() else 'source / pip install'}")
+    print(f"Data dir    : {paths.data_dir()}")
+    print(f"Platform    : {paths.platform_tag()}")
 
     try:
         from .apple import auth
 
         library = auth.library_path()
-        print(f"原生客户端  : {library}")
+        print(f"Auth client : {library}")
     except Exception as error:  # noqa: BLE001
-        print(f"原生客户端  : 不可用（{error}）")
+        print(f"Auth client : unavailable ({error})")
 
     try:
         from .apple.anisette import native
 
-        print(f"原生核心库  : {native.find_library()}")
+        print(f"Auth core   : {native.find_library()}")
     except Exception as error:  # noqa: BLE001
-        print(f"原生核心库  : 不可用（{error}）")
+        print(f"Auth core   : unavailable ({error})")
 
     from .core import zsign_backend
 
-    print(f"zsign 后备  : {zsign_backend.find_zsign() or '未安装（可选）'}")
+    print(f"zsign       : {zsign_backend.find_zsign() or 'not installed (optional)'}")
 
     try:
         from .device import list_devices
 
         devices = list_devices()
-        names = ", ".join(f"{d.name} ({d.transport})" for d in devices) or "未连接"
-        print(f"设备        : {names}")
+        names = ", ".join(f"{d.name} ({d.transport})" for d in devices) or "none connected"
+        print(f"Devices     : {names}")
     except Exception as error:  # noqa: BLE001
-        print(f"设备        : 不可用（{error}）")
+        print(f"Devices     : unavailable ({error})")
 
     entries = vault.list_all()
-    print(f"证书库      : {len(entries)} 套" + (": " + ", ".join(e.name for e in entries) if entries else ""))
+    print(f"Vault       : {len(entries)} entries" + (": " + ", ".join(e.name for e in entries) if entries else ""))
     return 0
 
 
@@ -805,7 +830,7 @@ def cmd_fetch_certs(args: argparse.Namespace) -> int:
     from ipasign.core.pki import cert_cache_dir, download_apple_certificates
 
     files = download_apple_certificates(force=args.force, log=print)
-    print(f"已缓存 {len(files)} 个证书到 {cert_cache_dir()}")
+    print(f"Cached {len(files)} certificates in {cert_cache_dir()}")
     return 0
 
 
@@ -817,89 +842,106 @@ def cmd_fetch_certs(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ipasign",
-        description="iOS IPA 重签名工具（跨平台，纯 Python 签名引擎）",
+        description="iOS IPA re-signing tool (cross-platform, pure-Python signing engine)",
     )
     parser.add_argument("--version", action="version", version=f"ipasign {__version__}")
     subparsers = parser.add_subparsers(dest="command")
 
-    sign = subparsers.add_parser("sign", help="对 IPA 重新签名")
-    sign.add_argument("input", help="输入 IPA 路径")
-    sign.add_argument("-o", "--output", help="输出 IPA 路径（默认 <输入>-signed.ipa）")
-    sign.add_argument("-c", "--p12", help="签名证书 .p12/.pfx")
-    sign.add_argument("-p", "--password", help="p12 密码（不填则交互输入）")
-    sign.add_argument("-m", "--profile", help="描述文件 .mobileprovision")
-    sign.add_argument("-b", "--bundle-id", help="修改 Bundle ID（默认沿用并将按描述文件校正）")
-    sign.add_argument("-e", "--entitlements", help="使用自定义 entitlements plist")
-    sign.add_argument("--chain", action="append", help="附加中间证书（可重复）")
-    sign.add_argument("--no-download", action="store_true", help="不要自动下载 Apple 中间证书")
-    sign.add_argument("--no-rewrite-bundle-id", action="store_true", help="禁止自动改写 Bundle ID")
-    sign.add_argument("--adhoc", "--ad-hoc", action="store_true", help="仅做 ad-hoc 签名（越狱设备）")
+    sign = subparsers.add_parser("sign", help="re-sign an IPA")
+    sign.add_argument("input", help="input IPA path")
+    sign.add_argument("-o", "--output", help="output IPA path (default <input>-signed.ipa)")
+    sign.add_argument("-c", "--p12", help="signing certificate .p12/.pfx")
+    sign.add_argument("-p", "--password", help="p12 password (prompted when omitted)")
+    sign.add_argument("-m", "--profile", help="provisioning profile .mobileprovision")
+    sign.add_argument(
+        "-b", "--bundle-id",
+        help="override the Bundle ID (kept by default, then corrected to the profile)",
+    )
+    sign.add_argument("-e", "--entitlements", help="use a custom entitlements plist")
+    sign.add_argument("--chain", action="append", help="extra intermediate certificate (repeatable)")
+    sign.add_argument(
+        "--no-download", action="store_true",
+        help="do not download Apple intermediate certificates automatically",
+    )
+    sign.add_argument(
+        "--no-rewrite-bundle-id", action="store_true",
+        help="never rewrite the Bundle ID automatically",
+    )
+    sign.add_argument(
+        "--adhoc", "--ad-hoc", action="store_true",
+        help="ad-hoc signing only (jailbroken devices)",
+    )
     sign.add_argument(
         "--engine", choices=["native", "zsign"], default="native",
-        help="签名引擎（zsign 需要外部可执行文件 IPASIGN_ZSIGN）",
+        help="signing engine (zsign needs the external IPASIGN_ZSIGN executable)",
     )
-    sign.add_argument("--keep-workdir", help="保留解包目录（调试用）")
-    sign.add_argument("--force", action="store_true", help="覆盖已存在的输出文件")
-    sign.add_argument("--json", action="store_true", help="以 JSON 输出结果")
+    sign.add_argument("--keep-workdir", help="keep the extracted workdir (for debugging)")
+    sign.add_argument("--force", action="store_true", help="overwrite an existing output file")
+    sign.add_argument("--json", action="store_true", help="print the result as JSON")
     sign.add_argument("-q", "--quiet", action="store_true")
     sign.add_argument("-v", "--verbose", action="store_true")
     sign.set_defaults(func=cmd_sign)
 
-    info = subparsers.add_parser("info", help="查看 IPA 基本信息")
+    info = subparsers.add_parser("info", help="show basic IPA information")
     info.add_argument("input")
     info.add_argument("--json", action="store_true")
     info.set_defaults(func=cmd_info)
 
-    verify = subparsers.add_parser("verify", help="校验 IPA 签名结构")
+    verify = subparsers.add_parser("verify", help="verify the IPA signature structure")
     verify.add_argument("input")
-    verify.add_argument("-c", "--p12", help="用于比对的签名证书")
+    verify.add_argument("-c", "--p12", help="signing certificate to compare against")
     verify.add_argument("-p", "--password")
-    verify.add_argument("-m", "--profile", help="用于比对的描述文件")
+    verify.add_argument("-m", "--profile", help="provisioning profile to compare against")
     verify.add_argument("--chain", action="append")
     verify.add_argument("--json", action="store_true")
     verify.set_defaults(func=cmd_verify)
 
-    vault_parser = subparsers.add_parser("vault", help="本地证书库（p12 + 描述文件）")
+    vault_parser = subparsers.add_parser(
+        "vault", help="local identity vault (p12 + provisioning profile)"
+    )
     vault_sub = vault_parser.add_subparsers(dest="action", required=True)
-    p = vault_sub.add_parser("list", help="列出证书库")
+    p = vault_sub.add_parser("list", help="list the vault")
     p.add_argument("--json", action="store_true")
-    p = vault_sub.add_parser("import", help="导入一套证书和描述文件")
+    p = vault_sub.add_parser("import", help="import a certificate and profile pair")
     p.add_argument("name")
     p.add_argument("p12")
     p.add_argument("-m", "--profile")
     p.add_argument("-p", "--password")
     p.add_argument("--force", action="store_true")
-    p = vault_sub.add_parser("show", help="查看某个证书的详情与自检")
+    p = vault_sub.add_parser("show", help="show one entry's details and self-check")
     p.add_argument("name")
     p.add_argument("-p", "--password")
     p.add_argument("--json", action="store_true")
-    p = vault_sub.add_parser("rm", help="从证书库删除")
+    p = vault_sub.add_parser("rm", help="delete from the vault")
     p.add_argument("name")
     vault_parser.set_defaults(func=cmd_vault)
 
     doctor_parser = subparsers.add_parser(
-        "doctor", help="签名前自检：证书 / 描述文件 / 设备 / IPA 是否匹配"
+        "doctor",
+        help="pre-flight checks: do the certificate / profile / device / IPA match?",
     )
     doctor_parser.add_argument("ipa", nargs="?")
-    doctor_parser.add_argument("--vault", help="使用证书库里的条目")
+    doctor_parser.add_argument("--vault", help="use a vault entry")
     doctor_parser.add_argument("-c", "--p12")
     doctor_parser.add_argument("-p", "--password")
     doctor_parser.add_argument("-m", "--profile")
     doctor_parser.add_argument("--chain", action="append")
     doctor_parser.add_argument(
-        "--device", action="store_true", help="同时检查已连接设备是否在描述文件里"
+        "--device", action="store_true",
+        help="also check whether connected devices are listed in the profile",
     )
     doctor_parser.add_argument("--json", action="store_true")
     doctor_parser.set_defaults(func=cmd_doctor)
 
     renew_parser = subparsers.add_parser(
-        "renew", help="用证书库里的身份重新签名（可选直接装机）"
+        "renew", help="re-sign with a vault identity (optionally install right away)"
     )
     renew_parser.add_argument("name")
     renew_parser.add_argument("ipa")
     renew_parser.add_argument("-o", "--output")
     renew_parser.add_argument(
-        "-p", "--password", help="p12 密码（工具生成的条目会自动使用保存的密码）"
+        "-p", "--password",
+        help="p12 password (tool-generated entries use the stored password)",
     )
     renew_parser.add_argument("-b", "--bundle-id")
     renew_parser.add_argument("--install", action="store_true")
@@ -907,31 +949,40 @@ def build_parser() -> argparse.ArgumentParser:
     renew_parser.add_argument("-v", "--verbose", action="store_true")
     renew_parser.add_argument(
         "--engine", choices=["native", "zsign"], default="native",
-        help="签名引擎（zsign 需要外部可执行文件）",
+        help="signing engine (zsign needs an external executable)",
     )
     renew_parser.set_defaults(func=cmd_renew)
 
-    devices = subparsers.add_parser("devices", help="列出已连接的 iPhone / iPad")
+    devices = subparsers.add_parser("devices", help="list connected iPhone / iPad devices")
     devices.add_argument("--json", action="store_true")
-    devices.add_argument("--wifi", action="store_true", help="只看 Wi-Fi 连接的设备")
+    devices.add_argument("--wifi", action="store_true", help="only show devices connected over Wi-Fi")
     devices.set_defaults(func=cmd_devices)
 
-    install = subparsers.add_parser("install", help="把已签名的 IPA 安装到设备")
+    install = subparsers.add_parser("install", help="install a signed IPA on a device")
     install.add_argument("ipa")
-    install.add_argument("--udid", help="目标设备 UDID（连接多台设备时必填）")
-    install.add_argument("--developer", action="store_true", help="作为开发者包安装")
-    install.add_argument("--wifi", action="store_true", help="通过 Wi-Fi 安装（需先配对 Wi-Fi 同步）")
-    install.add_argument("--verify", dest="verify", action="store_true", help="安装前校验签名结构")
-    install.add_argument("--no-verify", dest="verify", action="store_false", help="跳过安装前校验")
+    install.add_argument("--udid", help="target device UDID (required when several are connected)")
+    install.add_argument("--developer", action="store_true", help="install as a developer package")
+    install.add_argument(
+        "--wifi", action="store_true",
+        help="install over Wi-Fi (requires prior Wi-Fi sync pairing)",
+    )
+    install.add_argument(
+        "--verify", dest="verify", action="store_true",
+        help="verify the signature structure before installing",
+    )
+    install.add_argument(
+        "--no-verify", dest="verify", action="store_false",
+        help="skip the pre-install verification",
+    )
     install.add_argument("-v", "--verbose", action="store_true")
     install.set_defaults(func=cmd_install, verify=False)
 
-    profile = subparsers.add_parser("profile", help="查看描述文件内容")
+    profile = subparsers.add_parser("profile", help="show the contents of a provisioning profile")
     profile.add_argument("profile")
     profile.add_argument("--json", action="store_true")
     profile.set_defaults(func=cmd_profile)
 
-    identity = subparsers.add_parser("identity", help="查看签名证书与证书链")
+    identity = subparsers.add_parser("identity", help="show the signing certificate and its chain")
     identity.add_argument("p12")
     identity.add_argument("-p", "--password")
     identity.add_argument("--chain", action="append")
@@ -939,68 +990,85 @@ def build_parser() -> argparse.ArgumentParser:
     identity.add_argument("--json", action="store_true")
     identity.set_defaults(func=cmd_identity)
 
-    tui = subparsers.add_parser("tui", help="启动交互式终端界面")
+    tui = subparsers.add_parser("tui", help="start the interactive terminal UI")
     tui.set_defaults(func=cmd_tui)
 
     watch_parser = subparsers.add_parser(
-        "watch", help="自动续签：到期前自动重签并重装"
+        "watch", help="auto-renew: re-sign and reinstall before the profile expires"
     )
     watch_sub = watch_parser.add_subparsers(dest="action", required=True)
 
-    p = watch_sub.add_parser("add", help="添加一个续签任务")
+    p = watch_sub.add_parser("add", help="add a renewal job")
     p.add_argument("ipa")
-    p.add_argument("--vault", required=True, help="证书库条目名")
-    p.add_argument("--udid", help="目标设备（省略则运行时自动选择）")
-    p.add_argument("--output", help="重签后的输出路径（默认 <名字>-renewed.ipa）")
-    p.add_argument("--password", help="p12 密码（配合 --save-password 才会保存）")
-    p.add_argument("--save-password", action="store_true", help="把 p12 密码存进任务文件（明文）")
-    p.add_argument("--wifi", action="store_true", help="续签后用 Wi-Fi 安装")
+    p.add_argument("--vault", required=True, help="vault entry name")
+    p.add_argument("--udid", help="target device (auto-selected at run time when omitted)")
+    p.add_argument(
+        "--output", help="output path after re-signing (default <name>-renewed.ipa)"
+    )
+    p.add_argument("--password", help="p12 password (only stored together with --save-password)")
+    p.add_argument(
+        "--save-password", action="store_true",
+        help="store the p12 password in the job file (plain text)",
+    )
+    p.add_argument("--wifi", action="store_true", help="install over Wi-Fi after renewing")
     p.add_argument("--interval-hours", type=float, default=24.0)
-    p.add_argument("--id", help="任务名（默认随机）")
+    p.add_argument("--id", help="job name (random by default)")
     p.set_defaults(func=cmd_watch)
 
-    p = watch_sub.add_parser("list", help="列出续签任务")
+    p = watch_sub.add_parser("list", help="list renewal jobs")
     p.set_defaults(func=cmd_watch)
 
-    p = watch_sub.add_parser("rm", help="删除续签任务")
+    p = watch_sub.add_parser("rm", help="delete a renewal job")
     p.add_argument("id")
     p.set_defaults(func=cmd_watch)
 
-    p = watch_sub.add_parser("run", help="立即检查并续签一次")
-    p.add_argument("--force", action="store_true", help="忽略到期时间，强制续签")
+    p = watch_sub.add_parser("run", help="check and renew once, right now")
+    p.add_argument("--force", action="store_true", help="ignore the expiry and renew anyway")
     p.add_argument("--threshold-hours", type=float, default=24.0)
     p.set_defaults(func=cmd_watch)
 
-    p = watch_sub.add_parser("start", help="启动守护循环，定期检查")
+    p = watch_sub.add_parser("start", help="start the daemon loop that checks periodically")
     p.add_argument("--interval-minutes", type=float, default=60.0)
     p.add_argument("--threshold-hours", type=float, default=24.0)
     p.set_defaults(func=cmd_watch)
 
-    selfcheck = subparsers.add_parser("selfcheck", help="检查运行依赖与路径")
+    selfcheck = subparsers.add_parser("selfcheck", help="check runtime dependencies and paths")
     selfcheck.set_defaults(func=cmd_selfcheck)
 
-    fetch = subparsers.add_parser("fetch-certs", help="下载并缓存 Apple WWDR 中间证书")
+    fetch = subparsers.add_parser(
+        "fetch-certs", help="download and cache the Apple WWDR intermediate certificates"
+    )
     fetch.add_argument("--force", action="store_true")
     fetch.set_defaults(func=cmd_fetch_certs)
 
-    issue = subparsers.add_parser("issue", help="自动申请证书 + 描述文件并存入证书库")
-    issue.add_argument("--bundle-id", help="App 的 Bundle ID（或用 --ipa 自动读取）")
-    issue.add_argument("--ipa", help="从该 IPA 读取 Bundle ID")
-    issue.add_argument("--app-name", help="在开发者后台显示的名字（默认取 IPA 里的名字）")
-    issue.add_argument("--udid", help="顺便注册到该 UDID 的设备")
-    issue.add_argument("--name", help="证书库条目名（默认自动生成）")
-    issue.add_argument("--reuse", help="复用证书库里的证书，只申请新描述文件（免费账号推荐）")
+    issue = subparsers.add_parser(
+        "issue", help="issue a certificate + profile automatically and store them in the vault"
+    )
+    issue.add_argument("--bundle-id", help="the app's Bundle ID (or read it from --ipa)")
+    issue.add_argument("--ipa", help="read the Bundle ID from this IPA")
+    issue.add_argument(
+        "--app-name", help="name shown in the developer portal (defaults to the IPA's name)"
+    )
+    issue.add_argument("--udid", help="also register the device with this UDID")
+    issue.add_argument("--name", help="vault entry name (generated by default)")
+    issue.add_argument(
+        "--reuse", help="reuse a vault certificate and only request a new profile "
+        "(recommended for free accounts)",
+    )
     issue.add_argument(
         "--revoke-old", action="store_true",
-        help="证书名额满且本机没有私钥时，吊销账号里的旧证书再申请",
+        help="when the certificate slots are full and the key is not here, revoke the old "
+        "certificate and request again",
     )
-    issue.add_argument("--password", default="ipasign", help="生成的 p12 密码")
+    issue.add_argument("--password", default="ipasign", help="password for the generated p12")
     issue.set_defaults(func=cmd_issue)
 
-    login = subparsers.add_parser("login", help="用 Apple ID 登录，申请证书与描述文件")
-    login.add_argument("--account", required=True, help="Apple ID 邮箱")
-    login.add_argument("--password", help="省略则在本机安全提示输入（推荐）")
-    login.add_argument("--fresh", action="store_true", help="忽略已保存会话，强制重新登录")
+    login = subparsers.add_parser(
+        "login", help="sign in with an Apple ID to issue certificates and profiles"
+    )
+    login.add_argument("--account", required=True, help="Apple ID email")
+    login.add_argument("--password", help="prompt for it locally when omitted (recommended)")
+    login.add_argument("--fresh", action="store_true", help="ignore the saved session and sign in again")
     login.set_defaults(func=cmd_login)
 
 
@@ -1016,10 +1084,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         return int(args.func(args))
     except IpasignError as exc:
-        print(f"[错误] {exc}", file=sys.stderr)
+        print(f"[error] {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
-        print("\n[中断]", file=sys.stderr)
+        print("\n[interrupted]", file=sys.stderr)
         return 130
 
 

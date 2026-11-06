@@ -47,17 +47,19 @@ class StoredIdentity:
         if self.meta.get("profile_app_id"):
             bits.append(str(self.meta["profile_app_id"]))
         if self.meta.get("profile_expires"):
-            bits.append(f"到期 {str(self.meta['profile_expires'])[:10]}")
+            bits.append(f"expires {str(self.meta['profile_expires'])[:10]}")
         return "  ".join(bits)
 
 
 def _safe_name(name: str) -> str:
     name = name.strip()
     if not name or name in (".", "..") or any(ch in name for ch in '/\\:*?"<>|'):
-        raise IpasignError("证书库名字不能为空，也不能包含路径分隔符")
+        raise IpasignError("Vault name must not be empty or contain path separators")
     cleaned = "".join(ch for ch in name if ch.isalnum() or ch in "-_.")
     if cleaned != name:
-        raise IpasignError("证书库名字只能包含字母、数字、中文、- _ .")
+        raise IpasignError(
+            "Vault name may only contain letters, digits, CJK characters and - _ ."
+        )
     return cleaned
 
 
@@ -76,12 +78,12 @@ def save(
     safe = _safe_name(name)
     directory = vault_root() / safe
     if directory.exists() and not overwrite:
-        raise IpasignError(f"证书库里已经有 {safe!r} 了（加 --force 覆盖）")
+        raise IpasignError(f"the vault already has {safe!r} (add --force to overwrite)")
     directory.mkdir(parents=True, exist_ok=True)
 
     p12_source = Path(p12_path)
     if not p12_source.is_file():
-        raise IpasignError(f"找不到 p12: {p12_source}")
+        raise IpasignError(f"p12 not found: {p12_source}")
     identity = load_identity(p12_source, password)
     target_p12 = directory / "identity.p12"
     shutil.copyfile(p12_source, target_p12)
@@ -103,7 +105,7 @@ def save(
     if profile_path:
         profile_source = Path(profile_path)
         if not profile_source.is_file():
-            raise IpasignError(f"找不到描述文件: {profile_source}")
+            raise IpasignError(f"profile not found: {profile_source}")
         profile = ProvisioningProfile.load(profile_source)
         target_profile = directory / "profile.mobileprovision"
         shutil.copyfile(profile_source, target_profile)
@@ -126,10 +128,12 @@ def load(name: str) -> StoredIdentity:
     safe = _safe_name(name)
     directory = vault_root() / safe
     if not directory.is_dir():
-        raise IpasignError(f"证书库里没有 {safe!r}（ipasign vault list 查看已有的）")
+        raise IpasignError(
+            f"the vault has no {safe!r} (see `ipasign vault list` for existing entries)"
+        )
     p12_path = directory / "identity.p12"
     if not p12_path.is_file():
-        raise IpasignError(f"证书 {safe!r} 的 p12 文件丢失了: {p12_path}")
+        raise IpasignError(f"the p12 file for {safe!r} is missing: {p12_path}")
     profile_path = directory / "profile.mobileprovision"
     meta_file = directory / "meta.json"
     meta = {}
@@ -164,7 +168,7 @@ def remove(name: str) -> None:
     safe = _safe_name(name)
     directory = vault_root() / safe
     if not directory.is_dir():
-        raise IpasignError(f"证书库里没有 {safe!r}")
+        raise IpasignError(f"the vault has no {safe!r}")
     shutil.rmtree(directory)
 
 

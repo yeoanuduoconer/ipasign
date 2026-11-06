@@ -38,7 +38,7 @@ def _utcnow() -> dt.datetime:
 def ipa_bundle_id(ipa_path: "str | Path") -> str:
     path = Path(ipa_path)
     if not path.is_file():
-        raise IpasignError(f"找不到 IPA: {path}")
+        raise IpasignError(f"IPA not found: {path}")
     try:
         with zipfile.ZipFile(path) as archive:
             for name in archive.namelist():
@@ -50,8 +50,8 @@ def ipa_bundle_id(ipa_path: "str | Path") -> str:
                     info = plistlib.loads(archive.read(name))
                     return str(info.get("CFBundleIdentifier") or "")
     except zipfile.BadZipFile as exc:
-        raise IpasignError(f"不是合法的 IPA: {exc}") from exc
-    raise IpasignError("IPA 里找不到 Payload/*.app/Info.plist")
+        raise IpasignError(f"not a valid IPA: {exc}") from exc
+    raise IpasignError("no Payload/*.app/Info.plist inside the IPA")
 
 
 def run_checks(
@@ -68,17 +68,17 @@ def run_checks(
     bundle_id = None
     if ipa_path is not None:
         bundle_id = ipa_bundle_id(ipa_path)
-        checks.append(Check("IPA Bundle ID", bool(bundle_id), bundle_id or "读取失败"))
+        checks.append(Check("IPA Bundle ID", bool(bundle_id), bundle_id or "read failed"))
 
     if identity is not None:
         leaf = identity.leaf
         expired = leaf.not_valid_after_utc <= now
         checks.append(
             Check(
-                "证书有效期",
+                "Certificate expiry",
                 not expired,
-                f"{leaf.not_valid_after_utc:%Y-%m-%d} 到期"
-                + ("（已过期）" if expired else ""),
+                f"expires {leaf.not_valid_after_utc:%Y-%m-%d}"
+                + (" (expired)" if expired else ""),
             )
         )
         has_issuer = len(identity.certificates) > 1
@@ -86,19 +86,21 @@ def run_checks(
         if self_signed:
             checks.append(
                 Check(
-                    "证书链",
+                    "Certificate chain",
                     False,
-                    "自签名证书，iOS 不会信任（只能用于越狱设备或本地测试）",
+                    "self-signed certificate; iOS will not trust it "
+                    "(jailbroken devices or local testing only)",
                 )
             )
         else:
             checks.append(
                 Check(
-                    "证书链",
+                    "Certificate chain",
                     has_issuer,
-                    "含中间证书"
+                    "includes the intermediate certificate"
                     if has_issuer
-                    else "缺少 WWDR 中间证书，iOS 会拒绝安装（ipasign fetch-certs）",
+                    else "the WWDR intermediate is missing; iOS will reject the "
+                    "install (ipasign fetch-certs)",
                 )
             )
 
@@ -106,17 +108,17 @@ def run_checks(
         expired = profile.is_expired()
         checks.append(
             Check(
-                "描述文件有效期",
+                "Profile expiry",
                 (not expired) or allow_expired_profile,
-                (profile.expiration.strftime("%Y-%m-%d") if profile.expiration else "无到期时间")
-                + ("（已过期）" if expired else ""),
+                (profile.expiration.strftime("%Y-%m-%d") if profile.expiration else "no expiry")
+                + (" (expired)" if expired else ""),
             )
         )
         if bundle_id:
             covered = profile.supports_bundle_id(bundle_id)
             checks.append(
                 Check(
-                    "描述文件覆盖 Bundle ID",
+                    "Profile covers Bundle ID",
                     covered,
                     f"{bundle_id} vs {profile.application_identifier}",
                 )
@@ -124,9 +126,10 @@ def run_checks(
         if identity is not None:
             checks.append(
                 Check(
-                    "证书在描述文件名单内",
+                    "Certificate listed in profile",
                     profile.has_certificate(identity.leaf),
-                    "证书不在 DeveloperCertificates 里，iOS 会拒绝安装"
+                    "the certificate is not in DeveloperCertificates; "
+                    "iOS will reject the install"
                     if not profile.has_certificate(identity.leaf)
                     else "",
                 )
@@ -134,9 +137,9 @@ def run_checks(
             team_ok = profile.team_matches(identity.team_id) if identity.team_id else True
             checks.append(
                 Check(
-                    "团队一致",
+                    "Team matches",
                     team_ok,
-                    f"证书 {identity.team_id} vs 描述文件 {profile.team_id}",
+                    f"certificate {identity.team_id} vs profile {profile.team_id}",
                 )
             )
         devices_in_profile = profile.devices
@@ -145,9 +148,9 @@ def run_checks(
                 udid = getattr(device, "udid", "")
                 checks.append(
                     Check(
-                        f"设备 {udid} 已注册",
+                        f"Device {udid} registered",
                         udid in devices_in_profile,
-                        f"描述文件里有 {len(devices_in_profile)} 台设备",
+                        f"the profile lists {len(devices_in_profile)} devices",
                     )
                 )
 
@@ -158,7 +161,7 @@ def ipa_bundle_info(ipa_path: "str | Path") -> dict:
     """Return ``{bundle_id, name, version}`` read from the IPA's Info.plist."""
     path = Path(ipa_path)
     if not path.is_file():
-        raise IpasignError(f"找不到 IPA: {path}")
+        raise IpasignError(f"IPA not found: {path}")
     try:
         with zipfile.ZipFile(path) as archive:
             for name in archive.namelist():
@@ -178,8 +181,8 @@ def ipa_bundle_info(ipa_path: "str | Path") -> dict:
                         "version": str(info.get("CFBundleShortVersionString") or ""),
                     }
     except zipfile.BadZipFile as exc:
-        raise IpasignError(f"不是合法的 IPA: {exc}") from exc
-    raise IpasignError("IPA 里找不到 Payload/*.app/Info.plist")
+        raise IpasignError(f"not a valid IPA: {exc}") from exc
+    raise IpasignError("no Payload/*.app/Info.plist inside the IPA")
 
 
 def all_ok(checks: List[Check]) -> bool:

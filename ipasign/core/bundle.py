@@ -354,8 +354,8 @@ def sign_app(
     main_executable = resolve_executable(app_path, info)
     if macho.is_encrypted(main_executable.read_bytes()):
         raise BundleError(
-            "主程序仍处于加密状态（App Store 下载的 IPA 带 FairPlay DRM），"
-            "重签后无法运行；请改用已解密的 IPA"
+            "the main executable is still encrypted (IPAs downloaded from the App Store "
+            "carry FairPlay DRM); it will not run after re-signing; use a decrypted IPA"
         )
 
     team_id = identity.team_id if identity else (profile.app_id_prefix if profile else "")
@@ -429,13 +429,15 @@ def sign_app(
                         embed_nested = True
                     else:
                         report.warnings.append(
-                            f"{nested_id}: 描述文件不覆盖该 Bundle ID，扩展可能无法启动；"
-                            "建议使用通配 App ID 的描述文件，或为该扩展单独准备描述文件"
+                            f"{nested_id}: the profile does not cover this Bundle ID, so the "
+                            "extension may fail to launch; use a wildcard App ID profile, or "
+                            "prepare a separate profile for this extension"
                         )
                 if stale.is_file() and not embed_nested:
                     stale.unlink()
                     report.warnings.append(
-                        f"{nested_id}: 已移除与新描述文件不匹配的旧 embedded.mobileprovision"
+                        f"{nested_id}: removed the stale embedded.mobileprovision that does "
+                        "not match the new profile"
                     )
             _sign_bundle_contents(
                 bundle,

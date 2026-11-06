@@ -52,7 +52,7 @@ def test_cli_sign_info_verify(tmp_path, capsys):
     ])
     assert code == 0
     assert out.is_file()
-    assert "完成" in capsys.readouterr().out
+    assert "[done]" in capsys.readouterr().out
 
     assert cli.main(["info", str(out)]) == 0
     info = capsys.readouterr().out
@@ -61,7 +61,7 @@ def test_cli_sign_info_verify(tmp_path, capsys):
     assert "CMS" in info
 
     assert cli.main(["verify", str(out)]) == 0
-    assert "校验通过" in capsys.readouterr().out
+    assert "signature structure verified" in capsys.readouterr().out
 
 
 def test_cli_json_output(tmp_path, capsys):
@@ -99,7 +99,7 @@ def test_verify_report_for_unsigned_bundle(tmp_path):
     app = fixtures.make_app_dir(str(tmp_path / "src3"))
     report = verify.verify_bundle(__import__("pathlib").Path(app))
     assert not report.ok
-    assert any("未签名" in item for item in report.all_problems())
+    assert any("unsigned" in item for item in report.all_problems())
 
 
 def test_cli_profile_command(tmp_path, capsys):

@@ -146,7 +146,7 @@ def test_certificate_limit_without_vault_raises(monkeypatch, tmp_path):
     )
     _install_fakes(monkeypatch, client, tmp_path)
 
-    with pytest.raises(RuntimeError, match="证书名额已满"):
+    with pytest.raises(RuntimeError, match="Certificate limit reached"):
         issue_mod.issue(
             bundle_id="com.example.demo", app_name="Demo", log=lambda *_: None
         )

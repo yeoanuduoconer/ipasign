@@ -35,7 +35,7 @@ class DeviceInfo:
     extra: dict = field(default_factory=dict)
 
     def label(self) -> str:
-        bits = [self.name or "未命名设备", self.product_type or "?", f"iOS {self.ios_version or '?'}"]
+        bits = [self.name or "Unnamed device", self.product_type or "?", f"iOS {self.ios_version or '?'}"]
         return " / ".join(bits)
 
     @property
@@ -62,7 +62,7 @@ def library_available() -> bool:
 def _require_library() -> None:
     if not library_available():
         raise DeviceError(
-            "缺少 pymobiledevice3，无法与手机通信。安装：\n"
+            "pymobiledevice3 is missing; cannot talk to the phone. Install it with:\n"
             "  python -m pip install pymobiledevice3"
         )
 
@@ -142,12 +142,24 @@ def _list_via_cli(network_only: bool = False) -> List[DeviceInfo]:
 
 
 _FRIENDLY_ERRORS = {
-    "could not connect": "连不上手机：检查数据线、解锁屏幕、在手机上点「信任此电脑」",
-    "pairing": "设备未配对：解锁手机，点「信任此电脑」，然后重试",
-    "invalid host id": "配对记录失效：在手机上「设置 → 通用 → 传输或还原 → 还原位置与隐私」后重新信任",
-    "applicationverificationfailed": "iOS 拒绝了这个签名：证书/描述文件不匹配，或设备未注册",
-    "device is locked": "手机处于锁屏状态，解锁后重试",
-    "no device": "没有检测到设备：用数据线连接手机并解锁",
+    "could not connect": (
+        "cannot reach the phone: check the cable, unlock the screen and tap "
+        "'Trust This Computer' on the phone"
+    ),
+    "pairing": (
+        "the device is not paired: unlock the phone, tap 'Trust This Computer', "
+        "then retry"
+    ),
+    "invalid host id": (
+        "the pairing record is stale: on the phone go to Settings → General → "
+        "Transfer or Reset → Reset Location & Privacy, then trust again"
+    ),
+    "applicationverificationfailed": (
+        "iOS rejected the signature: certificate/profile mismatch, or the device "
+        "is not registered"
+    ),
+    "device is locked": "the phone is locked; unlock it and retry",
+    "no device": "no device detected: connect the phone with a cable and unlock it",
 }
 
 
@@ -155,7 +167,7 @@ def friendly_error(message: str) -> str:
     lowered = message.lower()
     for needle, hint in _FRIENDLY_ERRORS.items():
         if needle in lowered:
-            return f"{hint}\n原始信息：{message.strip()[:400]}"
+            return f"{hint}\nOriginal message: {message.strip()[:400]}"
     return message.strip()[:600]
 
 
@@ -176,37 +188,37 @@ def install_ipa(
     _require_library()
     path = Path(ipa_path)
     if not path.is_file():
-        raise DeviceError(f"找不到 IPA：{path}")
+        raise DeviceError(f"IPA not found: {path}")
     if path.suffix.lower() not in (".ipa", ".app"):
-        raise DeviceError("只支持 .ipa 或 .app")
+        raise DeviceError("only .ipa or .app is supported")
 
     devices = list_devices(wifi=True if wifi else None)
     if not devices and wifi:
         raise DeviceError(
-            "没有发现可通过 Wi-Fi 连接的设备。\n"
-            "  1) 先用数据线连一次，在 iTunes（Windows）或 Finder（macOS）里勾选「通过 Wi-Fi 同步」；\n"
-            "  2) 手机和电脑连同一个局域网，手机保持解锁；\n"
-            "  3) 之后拔掉数据线，ipasign devices --wifi 应该能看到它。"
+            "No device reachable over Wi-Fi.\n"
+            "  1) Connect the cable once and enable 'Sync over Wi-Fi' in iTunes (Windows) or Finder (macOS);\n"
+            "  2) Keep the phone unlocked on the same network as the computer;\n"
+            "  3) Unplug the cable; `ipasign devices --wifi` should now list it."
         )
     if not devices:
         raise DeviceError(
-            "没有检测到设备。请确认：\n"
-            "  1) 手机用数据线连上电脑；\n"
-            "  2) 手机解锁，并在弹窗里点「信任」；\n"
-            "  3) iTunes / Apple Devices 已安装（提供 Apple Mobile Device Service）。"
+            "No device detected. Please make sure:\n"
+            "  1) the phone is connected to the computer with a cable;\n"
+            "  2) the phone is unlocked and you tapped Trust in the prompt;\n"
+            "  3) iTunes / Apple Devices is installed (it provides the Apple Mobile Device Service)."
         )
     if udid is None:
         if len(devices) > 1:
             raise DeviceError(
-                "检测到多台设备，请用 --udid 指定：\n"
+                "Multiple devices detected; pick one with --udid:\n"
                 + "\n".join(f"  {device.udid}  {device.label()}" for device in devices)
             )
         udid = devices[0].udid
     target = next((device for device in devices if device.udid == udid), None)
     if target is not None:
-        log(f"目标设备: {target.label()} ({target.udid}, {target.transport})")
+        log(f"Target device: {target.label()} ({target.udid}, {target.transport})")
 
-    log("上传并安装中（大文件需要几分钟）...")
+    log("Uploading and installing (large apps take a few minutes)...")
     api_error = None
     try:
         asyncio.run(_install_async(path, udid, developer))
@@ -363,31 +375,32 @@ def _confirm_installed(path: Path, udid: str, log=lambda message: None) -> None:
             if app is not None:
                 break
         if attempt == 0:
-            log("等待设备刷新应用列表 ...")
+            log("Waiting for the device to refresh its app list ...")
         time.sleep(2)
     if app is None:
         if not listed:
             raise DeviceError(
-                "安装已提交，但读取设备应用列表失败（通常是因为手机锁屏或正忙）。\n"
-                "解锁手机后运行 `ipasign devices` 确认，或重新执行一次安装。"
+                "The install was submitted, but reading the device's app list failed "
+                "(usually because the phone is locked or busy).\n"
+                "Unlock the phone and run `ipasign devices` to confirm, or run the install again."
             )
         raise DeviceError(
-            f"系统报告安装完成，但设备上查不到 {bundle_id}。\n"
-            "常见原因：签名校验未通过（证书与描述文件不匹配 / 证书被吊销）、"
-            "或设备存储空间不足。"
+            f"The system reported success, but {bundle_id} is not on the device.\n"
+            "Common causes: the signature was rejected (certificate/profile mismatch, "
+            "or a revoked certificate), or the device is out of storage."
         )
     installed_team = str(
         (app.get("Entitlements") or {}).get("com.apple.developer.team-identifier", "")
     )
     if expected_team and installed_team and expected_team != installed_team:
-        signer = app.get("SignerIdentity", "未知")
+        signer = app.get("SignerIdentity", "unknown")
         raise DeviceError(
-            f"设备上的 {bundle_id} 属于另一个签名方（team {installed_team}，{signer}），"
-            "本次安装没有覆盖它。\n"
-            "这通常意味着设备上已经装了同 Bundle ID 的 App Store 版本；"
-            "要安装当前这个包，需要先卸载设备上的同名 App。"
+            f"The {bundle_id} on the device belongs to a different signer "
+            f"(team {installed_team}, {signer}); this install did not replace it.\n"
+            "This usually means the App Store build with the same Bundle ID is already "
+            "installed; uninstall that app before installing this package."
         )
-    log(f"确认已安装: {bundle_id}")
+    log(f"Confirmed installed: {bundle_id}")
 
 
 def restart_device(udid: str, log=lambda message: None) -> None:

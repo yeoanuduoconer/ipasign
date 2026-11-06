@@ -151,7 +151,7 @@ def test_encrypted_app_is_rejected(tmp_path):
 
     with _pytest.raises(Exception) as excinfo:
         sign_app(app, identity, profile)
-    assert "加密" in str(excinfo.value)
+    assert "encrypted" in str(excinfo.value)
 
 
 def test_workdir_is_created_next_to_output(tmp_path, monkeypatch):

@@ -38,49 +38,40 @@
 
 ## 安装
 
-### 下载即用（零依赖）
+### 安装（需要 Python 3.10+）
 
-仓库根目录带一个自带运行时的可执行文件，以及一个注册脚本：
-
-```
-ipasign.exe        约 80 MB（内置 Python、依赖库、原生登录库）
-setup.cmd          一次性注册命令
+```bash
+pip install .          # 或安装发布包：pip install ipasign
 ```
 
-**空系统上的用法（两步）：**
+装完直接就是命令，任意目录可用（pip 会把启动器放进 Python 的 Scripts 目录，
+该目录在 PATH 里）：
 
-1. 双击 `setup.cmd`。
+```powershell
+ipasign
+```
 
-   它在 `%LOCALAPPDATA%\Microsoft\WindowsApps\`（系统默认就在 PATH 里）建立一个
-   **硬链接**指向本目录的 `ipasign.exe`：同一份数据、两个名字，**不额外占用磁盘**。
-   跨盘符时自动退化为约 1 KB 的 `.cmd` 垫片，同样不会复制 80 MB。
-   不改 PATH、不需要管理员、不用重开终端。
+**原生登录库已经打包在 wheel 里**（`ipasign/native/win-x64/`），所以登录、
+申请证书开箱即用，不需要编译任何东西。
 
-2. 打开任意终端（PowerShell / cmd / Windows Terminal），输入：
+装机功能额外装一个依赖：
 
-   ```
-   ipasign
-   ```
+```bash
+pip install ".[device]"      # 或发布后：pip install "ipasign[device]"
+```
 
-卸载：删除 `%LOCALAPPDATA%\Microsoft\WindowsApps\ipasign.exe` 即可。
+开发时用可编辑安装，改代码立即生效：
 
-不想注册命令，也可以直接在项目目录里运行：PowerShell 下 `.\ipasign.exe`，
-cmd 下直接 `ipasign`。
+```bash
+pip install -e ".[all]"
+```
 
 **唯一的系统级前提**：如果要「插线装到 iPhone/iPad」，Windows 需要 Apple 的
 USB 驱动（iTunes 或「Apple Devices」应用，装一次即可）。这是设备驱动，
 任何装机工具都绕不开；**签名、登录、申请证书、自动续签完全不需要它**。
 macOS 自带该驱动。
 
-首次运行可能提示「未知发布者」（exe 未做代码签名），选择「仍要运行」即可。
-
-维护者重新打包：
-
-```bash
-pip install pyinstaller
-python -m PyInstaller --noconfirm --clean packaging/ipasign.spec
-# 产物：dist/ipasign.exe，复制到仓库根目录即可发布
-```
+卸载：`pip uninstall ipasign`。
 
 ### 从源码安装
 

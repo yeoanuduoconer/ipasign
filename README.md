@@ -63,13 +63,29 @@ cmake -S apple-auth -B apple-auth-client -G "Visual Studio 17 2022" -A x64 \
 cmake --build apple-auth-client --config Release
 ```
 
-然后让 `ipasign` 找到它：
+然后让 `ipasign` 找到它。按以下顺序查找，任选一种即可：
 
-```powershell
-$env:APPLE_AUTH_LIBRARY = "路径\apple_auth_client.dll"
-```
+1. **环境变量**（最直接）
 
-或放进默认位置 `E:\tools\ipasign\apple-auth-client\Release\`。
+   ```powershell
+   $env:APPLE_AUTH_LIBRARY = "D:\builds\apple-auth-client\Release\apple_auth_client.dll"
+   ```
+
+2. **用户数据目录**（推荐，之后无需再配）
+
+   ```
+   ~/.ipasign/native/apple_auth_client.dll     ← 客户端（登录、申请证书）
+   ~/.ipasign/native/apple_auth.dll            ← 核心（ADI / OTP）
+   ```
+
+   Windows 上是 `C:\Users\<你>\.ipasign\native\`。把 DLL 和它依赖的
+   `libcurl.dll`、`plist-2.0.dll`、`z.dll` 一起放进去。
+
+3. **开发布局**：库放在仓库同级目录（`apple-auth-client/Release/`）也会被自动找到。
+
+所有路径都由 `ipasign/paths.py` 统一解析，代码里没有写死任何绝对路径。
+额外的环境变量：`IPASIGN_HOME`（改数据目录）、`IPASIGN_NATIVE_DIR`（额外搜索目录）、
+`IPASIGN_APPLE_AUTH_DLL`（核心库路径）、`IPASIGN_ZSIGN`（zsign 路径）。
 
 > 只做「签名」不需要它；只有「登录 Apple ID / 自动申请证书」需要。
 

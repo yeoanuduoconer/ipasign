@@ -17,12 +17,9 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-STATE_DIR = Path.home() / ".ipasign" / "apple-auth-device-mac"
-LIBRARY_CANDIDATES = (
-    Path(r"E:\tools\ipasign\apple-auth-client\Release\apple_auth_client.dll"),
-    Path(r"E:\tools\ipasign\apple-auth-build\Release\apple_auth_client.dll"),
-)
-SOURCE_DIR = Path(r"E:\tools\ipasign\apple-auth-src")
+from ipasign import paths
+
+STATE_DIR = paths.data_dir() / "apple-auth-device-mac"
 
 
 class AppleAuthUnavailable(RuntimeError):
@@ -32,16 +29,21 @@ class AppleAuthUnavailable(RuntimeError):
 def library_path() -> Path:
     explicit = os.environ.get("APPLE_AUTH_LIBRARY")
     if explicit:
-        path = Path(explicit)
+        path = Path(explicit).expanduser()
         if path.is_file():
             return path
         raise AppleAuthUnavailable(f"APPLE_AUTH_LIBRARY not found: {path}")
-    for candidate in LIBRARY_CANDIDATES:
-        if candidate.is_file():
-            return candidate
+    found = paths.find_native(
+        "apple_auth_client.dll",
+        "libapple_auth_client.so",
+        "libapple_auth_client.dylib",
+    )
+    if found is not None:
+        return found
     raise AppleAuthUnavailable(
-        "apple_auth_client.dll not found; build apple-auth with "
-        "APPLE_AUTH_WITH_CLIENT=ON or set APPLE_AUTH_LIBRARY"
+        "找不到 apple-auth 原生客户端（apple_auth_client.dll）。\n"
+        "编译方法见 README，然后把库文件放到 ~/.ipasign/native/，"
+        "或设置环境变量 APPLE_AUTH_LIBRARY 指向它。"
     )
 
 
@@ -55,9 +57,12 @@ def _import_device():
 
         return Device
     except ImportError:
-        python_dir = SOURCE_DIR / "python"
-        if python_dir.is_dir() and str(python_dir) not in sys.path:
-            sys.path.insert(0, str(python_dir))
+        # Optional development fallback: an upstream apple-auth checkout.
+        source = os.environ.get("IPASIGN_APPLE_AUTH_SOURCE")
+        if source:
+            python_dir = Path(source).expanduser() / "python"
+            if python_dir.is_dir() and str(python_dir) not in sys.path:
+                sys.path.insert(0, str(python_dir))
         try:
             from apple_auth import Device  # noqa: PLC0415
         except ImportError as error:  # pragma: no cover - environment dependent

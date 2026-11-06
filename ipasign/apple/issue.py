@@ -15,6 +15,8 @@ can:
 
 from __future__ import annotations
 
+from ipasign import paths
+
 import base64
 import secrets
 import tempfile
@@ -112,7 +114,7 @@ def _obtain_identity(
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     # Persist immediately: a crash after Apple signs the CSR would otherwise
     # leave an unusable certificate (private key lost) and burn the only slot.
-    key_stash = Path.home() / ".ipasign" / "pending-key.pem"
+    key_stash = paths.ensure_data_dir() / "pending-key.pem"
     key_stash.parent.mkdir(parents=True, exist_ok=True)
     key_stash.write_bytes(
         key.private_bytes(

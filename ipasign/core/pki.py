@@ -10,6 +10,8 @@ folder next to the tool, or the Windows certificate store.
 
 from __future__ import annotations
 
+from ipasign import paths
+
 import base64
 import os
 import re
@@ -201,7 +203,7 @@ def _windows_store_lookup() -> List[x509.Certificate]:
 def default_chain_dirs() -> List[Path]:
     """Directories searched automatically for intermediate certificates."""
     here = Path(__file__).resolve().parent.parent
-    candidates = [here / "certs", Path.home() / ".ipasign" / "certs"]
+    candidates = [here / "certs", paths.data_dir() / "certs"]
     return [path for path in candidates if path.is_dir()]
 
 
@@ -222,7 +224,7 @@ APPLE_CERTIFICATE_URLS: Dict[str, str] = {
 
 
 def cert_cache_dir(create: bool = True) -> Path:
-    directory = Path.home() / ".ipasign" / "certs"
+    directory = paths.data_dir() / "certs"
     if create:
         directory.mkdir(parents=True, exist_ok=True)
     return directory

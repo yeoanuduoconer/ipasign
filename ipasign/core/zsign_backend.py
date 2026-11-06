@@ -18,12 +18,10 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+from ipasign import paths
 from ipasign.core.errors import IpasignError
 
-CANDIDATES = (
-    Path(r"E:\tools\ipasign\zsign-ref\zsign.exe"),
-    Path(r"E:\tools\ipasign\zsign\zsign.exe"),
-)
+
 
 
 def find_zsign() -> Optional[Path]:
@@ -31,11 +29,7 @@ def find_zsign() -> Optional[Path]:
     if explicit:
         path = Path(explicit)
         return path if path.is_file() else None
-    for candidate in CANDIDATES:
-        if candidate.is_file():
-            return candidate
-    found = shutil.which("zsign")
-    return Path(found) if found else None
+    return paths.find_tool("zsign.exe", "zsign")
 
 
 def bundle_id_for_profile(profile) -> Optional[str]:

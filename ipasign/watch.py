@@ -31,6 +31,8 @@ kept in memory.
 
 from __future__ import annotations
 
+from ipasign import paths
+
 import datetime as dt
 import getpass
 import json
@@ -51,7 +53,7 @@ DEFAULT_INTERVAL_MINUTES = 60
 
 
 def store_path() -> Path:
-    return Path.home() / ".ipasign" / "renewals.json"
+    return paths.data_dir() / "renewals.json"
 
 
 @dataclass

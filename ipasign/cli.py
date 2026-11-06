@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ipasign import paths
+
 import argparse
 import getpass
 import json
@@ -628,7 +630,7 @@ def _fetch_developer_teams(headers: Dict[str, str]) -> List[Dict]:
 
     import requests
 
-    bundle = Path.home() / ".ipasign" / "ca-bundle.pem"
+    bundle = paths.ca_bundle()
     body = {
         "clientId": "XABBG36SBA",
         "protocolVersion": "QH65B2",

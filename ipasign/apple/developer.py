@@ -12,6 +12,8 @@ decoded response plist.
 
 from __future__ import annotations
 
+from ipasign import paths
+
 import base64
 import plistlib
 import uuid
@@ -40,7 +42,7 @@ class DeveloperError(RuntimeError):
 def _verify():
     from pathlib import Path
 
-    bundle = Path.home() / ".ipasign" / "ca-bundle.pem"
+    bundle = paths.ca_bundle()
     return str(bundle) if bundle.is_file() else True
 
 

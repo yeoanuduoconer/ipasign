@@ -19,6 +19,8 @@ mbedtls/curl dependencies must sit next to it or on ``PATH``).
 
 from __future__ import annotations
 
+from ipasign import paths
+
 import base64
 import ctypes
 import os
@@ -32,10 +34,7 @@ OTP_SIZE = 16
 
 AAUTH_OK = 0
 
-DEFAULT_DLL_CANDIDATES = (
-    Path(r"E:\tools\ipasign\apple-auth-build\Release\apple_auth.dll"),
-    Path(r"E:\tools\ipasign\apple-auth-build\vcpkg_installed\x64-windows\bin\apple_auth.dll"),
-)
+
 
 
 class AnisetteError(RuntimeError):
@@ -49,11 +48,15 @@ def find_library() -> Path:
         if not path.is_file():
             raise AnisetteError(f"IPASIGN_APPLE_AUTH_DLL not found: {path}")
         return path
-    for candidate in DEFAULT_DLL_CANDIDATES:
-        if candidate.is_file():
-            return candidate
+    found = paths.find_native(
+        "apple_auth.dll", "libapple_auth.so", "libapple_auth.dylib"
+    )
+    if found is not None:
+        return found
     raise AnisetteError(
-        "apple_auth.dll not found; build it or set IPASIGN_APPLE_AUTH_DLL"
+        "找不到 apple-auth 核心库（apple_auth.dll）。\n"
+        "编译方法见 README，然后把库文件放到 ~/.ipasign/native/，"
+        "或设置 IPASIGN_APPLE_AUTH_DLL 指向它。"
     )
 
 

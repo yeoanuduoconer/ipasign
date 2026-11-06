@@ -11,6 +11,8 @@ Passwords are never written to disk by this module.
 
 from __future__ import annotations
 
+from ipasign import paths
+
 import json
 import shutil
 from dataclasses import dataclass, field
@@ -21,7 +23,7 @@ from ipasign.core.errors import IpasignError
 
 
 def vault_root() -> Path:
-    root = Path.home() / ".ipasign" / "identities"
+    root = paths.data_dir() / "identities"
     root.mkdir(parents=True, exist_ok=True)
     return root
 

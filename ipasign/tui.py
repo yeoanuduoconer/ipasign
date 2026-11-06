@@ -17,6 +17,8 @@ macOS and Linux without an extra event loop.
 
 from __future__ import annotations
 
+from ipasign import paths
+
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -184,7 +186,7 @@ def render_home() -> None:
         "设备",
         ", ".join(f"{d.name} ({d.ios_version})" for d in devices) if devices else "[yellow]未检测到[/yellow]",
     )
-    status.add_row("配置目录", str(Path.home() / ".ipasign"))
+    status.add_row("配置目录", str(paths.data_dir()))
     console.print(Panel(status, title="[bold cyan]ipasign[/bold cyan]  iOS 签名工具", border_style="cyan"))
 
     menu = Table(show_header=False, box=None, padding=(0, 2))
@@ -513,8 +515,8 @@ def screen_about() -> None:
     info.add_column(style="dim")
     info.add_column()
     info.add_row("版本", __version__)
-    info.add_row("配置", str(Path.home() / ".ipasign"))
-    info.add_row("证书库", str(Path.home() / ".ipasign" / "identities"))
+    info.add_row("配置", str(paths.data_dir()))
+    info.add_row("证书库", str(paths.data_dir() / "identities"))
     info.add_row("ADI", str(auth.STATE_DIR))
     try:
         info.add_row("原生库", str(auth.library_path()))

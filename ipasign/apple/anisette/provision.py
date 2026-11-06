@@ -18,6 +18,8 @@ generator needs.
 
 from __future__ import annotations
 
+from ipasign import paths
+
 import base64
 import datetime as _dt
 import secrets
@@ -34,12 +36,12 @@ from typing import Optional
 from .native import AnisetteError, _Native, find_library
 
 URL_BAG = "https://gsa.apple.com/grandslam/GsService2/lookup"
-STATE_DIR = Path.home() / ".ipasign" / "anisette"
+STATE_DIR = paths.data_dir() / "anisette"
 ADI_PATH = STATE_DIR / "adi.pb"
 INFO_PATH = STATE_DIR / "info.json"
 
 CLIENT_INFO = "<PC> <Windows;6.2(0,0);9200> <com.apple.AuthKitWin/1 (com.apple.iCloud/1)>"
-DEFAULT_CA = Path.home() / ".ipasign" / "ca-bundle.pem"
+DEFAULT_CA = paths.data_dir() / "ca-bundle.pem"
 
 
 class ProvisioningError(RuntimeError):

@@ -194,21 +194,6 @@ Content-Type     application/x-www-form-urlencoded（即使 body 是 plist）
 `pymobiledevice3 apps list` 确认 bundle id 真的出现了（iOS 有时会"报告成功"
 但实际丢弃），并重试 5 次以避开列表刷新延迟。
 
-## 测试
-
-```
-tests/fixtures.py     合成 Mach-O、自签证书、CMS、描述文件
-tests/test_macho.py   签名结构与自校验
-tests/test_derplist.py DER entitlements 与 zsign 参考向量逐字节对比
-tests/test_bundle.py  端到端签名一个合成 IPA
-tests/test_cli.py     命令行
-tests/test_adi.py     ADI 容器解析
-tests/test_pki.py     证书链
-tests/test_profile.py 描述文件
-tests/test_vault.py   证书库
-```
-
-
 ## 七、自动续签
 
 ipasign/watch.py 是一个很薄的调度层：
@@ -265,3 +250,17 @@ Apple 的 cdhash 本身就是截断到 20 字节的 SHA-256，iOS 用它和实�
 
 修复：生成该 plist 时写入 `cdhash[:20]`；`1.2.840.113635.100.9.2`（DER 形式）
 仍保留完整 32 字节 SHA-256，与 codesign/zsign 一致。回归测试见 `tests/test_cms.py`。
+
+## 测试
+
+```
+tests/fixtures.py     合成 Mach-O、自签证书、CMS、描述文件
+tests/test_macho.py   签名结构与自校验
+tests/test_derplist.py DER entitlements 与 zsign 参考向量逐字节对比
+tests/test_bundle.py  端到端签名一个合成 IPA
+tests/test_cli.py     命令行
+tests/test_adi.py     ADI 容器解析
+tests/test_pki.py     证书链
+tests/test_profile.py 描述文件
+tests/test_vault.py   证书库
+```

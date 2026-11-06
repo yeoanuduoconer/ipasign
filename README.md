@@ -7,15 +7,19 @@
 ```
 ┌───────────────────────────────── ipasign  iOS 签名工具 ─────────────────────────────────┐
 │ 版本      1.0.0                                                                          │
-│ 证书库    2 套: team123456-9r769gwk2v, team123456-4jqg2g62qf                             │
+│ 证书库    0 套 (空)                                                                      │
+│ 登录      未登录                                                                         │
 │ 设备      iPad (6) (26.5)                                                                │
 │ 配置目录  C:\Users\you\.ipasign                                                          │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
-  1  Apple ID 登录（申请开发者会话）        5  签名体检（doctor）
-  2  申请证书 + 描述文件（证书工厂）        6  证书库管理
-  3  签名 IPA                               7  设备与驱动信息
-  4  安装到设备                             8  关于 / 路径
+  1  Apple ID 登录（申请开发者会话）        6  证书库管理
+  2  申请证书 + 描述文件（证书工厂）        7  设备与驱动信息
+  3  签名 IPA                               8  自动续签（到期自动重签重装）
+  4  安装到设备                             9  关于 / 路径
+  5  签名体检（doctor）                     0  退出
 ```
+
+菜单项是**自包含**的：没登录就直接点「2」，它会先引导你登录再继续；证书库为空时点「3」，它会先帮你申请一套证书。
 
 ## 功能一览
 
@@ -26,9 +30,11 @@
 | IPA 打包 | 解包 → 逐层签名（appex / framework / dylib）→ 重打包 |
 | 证书工厂 | 自己的 Apple ID 登录，自动申请开发证书 + App ID + 描述文件 |
 | 设备证明 | 自动 provision ADI v3（Apple 设备身份），不依赖任何第三方 anisette 服务 |
-| 装机 | 通过 `pymobiledevice3` 直接安装到 USB 连接的 iPhone / iPad |
+| 装机 | 通过 `pymobiledevice3` 安装到 USB 或 Wi-Fi 连接的设备 |
+| 自动续签 | 到期前自动重新申请描述文件 → 重签 → 重装，可守护循环 |
 | 体检 | 证书链、有效期、Bundle ID 覆盖、设备 UDID、团队一致性逐项检查 |
 | 证书库 | 多套身份集中管理，`renew` 一键重签 |
+| 双引擎 | 默认自研 `native` 引擎，需要时可切到外部 `zsign` |
 
 ## 安装
 
@@ -87,12 +93,13 @@ ipasign login --account you@example.com
 ipasign issue --bundle-id com.example.myapp --app-name "我的 App" \
               --udid 00008110-0011223344556677
 
-# 3. 签名
-ipasign sign 原版.ipa -o 已签名.ipa \
-       --identity ~/.ipasign/identities/<条目>/identity.p12 \
-       --profile  ~/.ipasign/identities/<条目>/profile.mobileprovision
+# 3. 签名（用申请产生的证书库条目）
+ipasign renew <条目名> 原版.ipa -o 已签名.ipa -p <p12密码>
 
-# 4. 一键续签 + 安装（证书库里的条目）
+# 4. 或直接用 p12 + 描述文件签名
+ipasign sign 原版.ipa -o 已签名.ipa -c id.p12 -m profile.mobileprovision -p <p12密码>
+
+# 5. 签名并安装到设备
 ipasign renew <条目名> 原版.ipa -o 已签名.ipa -p <p12密码> --install
 ```
 
@@ -102,16 +109,17 @@ ipasign renew <条目名> 原版.ipa -o 已签名.ipa -p <p12密码> --install
 | --- | --- |
 | `ipasign` | 交互式终端界面 |
 | `ipasign tui` | 同上（显式） |
-| `ipasign login --account <Apple ID>` | 登录 Apple ID，换取开发者会话并列出团队 |
-| `ipasign issue --bundle-id <id>` | 申请开发证书 / App ID / 描述文件并入库 |
+| `ipasign login --account <Apple ID> [--fresh]` | 登录 Apple ID，换取开发者会话并列出团队 |
+| `ipasign issue --bundle-id <id> [--udid <udid>]` | 申请开发证书 / App ID / 描述文件并入库 |
 | `ipasign issue ... --reuse <条目>` | 复用已有证书，只申请新描述文件（免费账号必用） |
 | `ipasign sign <ipa>` | 用指定 p12 + 描述文件重签名（`--engine zsign` 走后备引擎） |
 | `ipasign renew <条目> <ipa>` | 从证书库取身份并重签，可 `--install`、`--engine zsign` |
-| `ipasign install <ipa> --udid <udid>` | 安装到设备 |
+| `ipasign install <ipa> [--udid <udid>] [--wifi]` | 安装到设备 |
 | `ipasign verify <ipa>` | 校验签名结构（CodeDirectory / CMS / 资源封印） |
 | `ipasign doctor <ipa> --vault <条目>` | 签名体检 |
 | `ipasign vault list/import/show/rm` | 证书库管理 |
-| `ipasign devices` | 列出已连接设备 |
+| `ipasign devices [--wifi]` | 列出已连接设备 |
+| `ipasign watch add/list/rm/run/start` | 自动续签任务管理 |
 | `ipasign info <ipa>` | 查看 IPA 基本信息 |
 | `ipasign profile <file>` | 查看描述文件 |
 | `ipasign identity <p12>` | 查看证书与证书链 |

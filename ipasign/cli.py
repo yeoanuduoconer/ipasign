@@ -679,6 +679,7 @@ def cmd_issue(args: argparse.Namespace) -> int:
             vault_name=args.name,
             reuse=args.reuse,
             password=args.password,
+            allow_revoke=args.revoke_old,
         )
     except Exception as exc:  # noqa: BLE001 - remote + native errors
         print(f"[错误] 签发失败: {exc}", file=sys.stderr)
@@ -942,6 +943,10 @@ def build_parser() -> argparse.ArgumentParser:
     issue.add_argument("--udid", help="顺便注册到该 UDID 的设备")
     issue.add_argument("--name", help="证书库条目名（默认自动生成）")
     issue.add_argument("--reuse", help="复用证书库里的证书，只申请新描述文件（免费账号推荐）")
+    issue.add_argument(
+        "--revoke-old", action="store_true",
+        help="证书名额满且本机没有私钥时，吊销账号里的旧证书再申请",
+    )
     issue.add_argument("--password", default="ipasign", help="生成的 p12 密码")
     issue.set_defaults(func=cmd_issue)
 

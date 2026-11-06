@@ -294,10 +294,33 @@ def screen_issue() -> None:
                 reuse=reuse,
             )
     except Exception as exc:  # noqa: BLE001
-        console.print(f"[red]签发失败:[/red] {exc}")
-        return
+        message = str(exc)
+        if "证书名额已满" in message:
+            console.print("[yellow]账号里还有一张旧证书，本机没有它的私钥。[/yellow]")
+            console.print(
+                "[dim]吊销它之后，之前用它签名的 App 会失效，需要用新证书重签。[/dim]"
+            )
+            if Confirm.ask("吊销旧证书并重试？", default=True):
+                try:
+                    with console.status("[cyan]正在吊销并重新申请…[/cyan]"):
+                        result = issue(
+                            bundle_id=bundle_id,
+                            app_name=app_name,
+                            device_udid=udid,
+                            reuse=reuse,
+                            allow_revoke=True,
+                        )
+                except Exception as retry_error:  # noqa: BLE001
+                    console.print(f"[red]签发失败:[/red] {retry_error}")
+                    return
+            else:
+                console.print("[dim]已取消。可以在证书库管理里处理旧证书。[/dim]")
+                return
+        else:
+            console.print(f"[red]签发失败:[/red] {message}")
+            return
     console.print("[green]签发成功[/green]")
-    console.print(f"  证书库条目 : [bold]{result['name']}[/bold]（p12 密码 {password}）")
+    console.print(f"  证书库条目 : [bold]{result['name']}[/bold]")
     console.print(f"  Team       : {result['team_id']}")
     console.print(f"  Bundle ID  : {result['bundle_id']}")
     console.print(f"  描述文件   : {result['profile_app_id']}")

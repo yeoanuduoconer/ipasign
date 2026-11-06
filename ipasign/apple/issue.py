@@ -95,6 +95,7 @@ def _obtain_identity(
     reuse: Optional[str],
     password: str,
     log,
+    allow_revoke: bool = False,
 ) -> Tuple[SigningIdentity, Optional[dict], bool]:
     """Return ``(identity, cert_info, reused)``.
 
@@ -121,21 +122,28 @@ def _obtain_identity(
         )
     )
 
+    csr = _generate_csr(key)
     try:
         log("[..] 提交 CSR，申请开发证书")
-        client.submit_csr(team_id, _generate_csr(key))
+        client.submit_csr(team_id, csr)
     except DeveloperError as error:
         if error.payload.get("resultCode") != CERT_LIMIT_CODE:
             raise
         entry, identity = _vault_identity_for_team(team_id, password)
-        key_stash.unlink(missing_ok=True)
-        if identity is None:
+        if identity is not None:
+            key_stash.unlink(missing_ok=True)
+            log(f"[..] 证书名额已满，改用证书库中的证书: {entry.name}")
+            return identity, None, True
+        if allow_revoke:
+            revoked = revoke_all_certificates(client, team_id, log=log)
+            log(f"[..] 已吊销 {revoked} 张旧证书，重新提交申请")
+            client.submit_csr(team_id, csr)
+        else:
+            key_stash.unlink(missing_ok=True)
             raise RuntimeError(
                 "证书名额已满（免费 Apple ID 只能有 1 张开发证书）。"
-                "请先在开发者后台吊销旧证书，或用 --reuse 指定证书库条目。"
+                "账号里的旧证书没有对应私钥，可以吊销后重试。"
             ) from error
-        log(f"[..] 证书名额已满，改用证书库中的证书: {entry.name}")
-        return identity, None, True
 
     fresh = [
         c for c in client.list_certificates(team_id)
@@ -157,6 +165,21 @@ def _obtain_identity(
     )
     return identity, cert_info, False
 
+
+def revoke_all_certificates(client: DeveloperClient, team_id: str, log=print) -> int:
+    """Revoke every development certificate of the team.
+
+    Needed when the account still holds a certificate whose private key is not
+    on this machine (fresh install, cleaned vault): the free tier allows only
+    one active certificate, so a new CSR is rejected until it is gone.
+    """
+    certificates = client.list_certificates(team_id)
+    for certificate in certificates:
+        log(f"[..] 吊销旧证书 {certificate.get('certificateId')}")
+        client.revoke_certificate(
+            team_id, certificate["certificateId"], certificate["serialNumber"]
+        )
+    return len(certificates)
 
 def _ensure_app_id(
     client: DeveloperClient, team_id: str, bundle_id: str, app_name: str, log
@@ -181,6 +204,7 @@ def issue(
     vault_name: Optional[str] = None,
     reuse: Optional[str] = None,
     password: Optional[str] = None,
+    allow_revoke: bool = False,
     log=print,
 ) -> Dict:
     """Create (or reuse) a certificate + profile for ``bundle_id``."""
@@ -206,7 +230,12 @@ def issue(
             log(f"[..] 设备已注册: {device_udid}")
 
     identity, cert_info, _reused = _obtain_identity(
-        client, team_id, reuse=reuse, password=password, log=log
+        client,
+        team_id,
+        reuse=reuse,
+        password=password,
+        log=log,
+        allow_revoke=allow_revoke,
     )
 
     app_id = _ensure_app_id(client, team_id, bundle_id, app_name, log)

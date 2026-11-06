@@ -89,9 +89,8 @@ ipasign
 # 1. 登录一次（密码 + 验证码都在终端输入）
 ipasign login --account you@example.com
 
-# 2. 申请证书 + 描述文件（自动注册设备与 App ID）
-ipasign issue --bundle-id com.example.myapp --app-name "我的 App" \
-              --udid 00008110-0011223344556677
+# 2. 申请证书 + 描述文件（Bundle ID 直接从 IPA 里读，不用自己填）
+ipasign issue --ipa 原版.ipa --udid 00008110-0011223344556677
 
 # 3. 签名（用申请产生的证书库条目）
 ipasign renew <条目名> 原版.ipa -o 已签名.ipa -p <p12密码>
@@ -110,7 +109,8 @@ ipasign renew <条目名> 原版.ipa -o 已签名.ipa -p <p12密码> --install
 | `ipasign` | 交互式终端界面 |
 | `ipasign tui` | 同上（显式） |
 | `ipasign login --account <Apple ID> [--fresh]` | 登录 Apple ID，换取开发者会话并列出团队 |
-| `ipasign issue --bundle-id <id> [--udid <udid>]` | 申请开发证书 / App ID / 描述文件并入库 |
+| `ipasign issue --ipa <ipa>` | 从 IPA 自动读取 Bundle ID 并申请证书 / App ID / 描述文件 |
+| `ipasign issue --bundle-id <id>` | 手动指定 Bundle ID 申请 |
 | `ipasign issue ... --reuse <条目>` | 复用已有证书，只申请新描述文件（免费账号必用） |
 | `ipasign sign <ipa>` | 用指定 p12 + 描述文件重签名（`--engine zsign` 走后备引擎） |
 | `ipasign renew <条目> <ipa>` | 从证书库取身份并重签，可 `--install`、`--engine zsign` |

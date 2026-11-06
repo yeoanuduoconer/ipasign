@@ -647,9 +647,18 @@ def cmd_issue(args: argparse.Namespace) -> int:
     """Issue a certificate + provisioning profile through the developer portal."""
     from ipasign.apple.issue import issue
 
+    bundle_id = args.bundle_id
+    if not bundle_id:
+        if not args.ipa:
+            raise IpasignError("请用 --bundle-id 指定 Bundle ID，或用 --ipa 从 IPA 自动读取")
+        from ipasign.core.doctor import ipa_bundle_id
+
+        bundle_id = ipa_bundle_id(args.ipa)
+        print(f"[..] 从 IPA 读取 Bundle ID: {bundle_id}")
+
     try:
         result = issue(
-            bundle_id=args.bundle_id,
+            bundle_id=bundle_id,
             app_name=args.app_name,
             device_udid=args.udid,
             vault_name=args.name,
@@ -909,7 +918,8 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.set_defaults(func=cmd_fetch_certs)
 
     issue = subparsers.add_parser("issue", help="自动申请证书 + 描述文件并存入证书库")
-    issue.add_argument("--bundle-id", required=True, help="App 的 Bundle ID")
+    issue.add_argument("--bundle-id", help="App 的 Bundle ID（或用 --ipa 自动读取）")
+    issue.add_argument("--ipa", help="从该 IPA 读取 Bundle ID")
     issue.add_argument("--app-name", default="ipasign app", help="在开发者后台显示的名字")
     issue.add_argument("--udid", help="顺便注册到该 UDID 的设备")
     issue.add_argument("--name", help="证书库条目名（默认自动生成）")

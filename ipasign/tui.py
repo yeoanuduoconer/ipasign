@@ -244,11 +244,24 @@ def screen_login() -> None:
 
 def screen_issue() -> None:
     from .apple.issue import issue
+    from .core.doctor import ipa_bundle_id
 
     if not _ensure_login():
         return
-    bundle_id = Prompt.ask("Bundle ID", default="com.example.myapp")
-    app_name = Prompt.ask("App 名称", default="ipasign app")
+
+    # Users usually have an IPA but do not know its Bundle ID, so read it
+    # from the package and only ask when they want something else.
+    detected = None
+    source = _ask_path("要签名的 IPA（拖进来自动识别 Bundle ID，直接回车则手动输入）", must_exist=False)
+    if source is not None:
+        try:
+            detected = ipa_bundle_id(source)
+            console.print(f"[dim]从 IPA 读取到 Bundle ID:[/dim] [bold]{detected}[/bold]")
+        except Exception as error:  # noqa: BLE001
+            console.print(f"[yellow]读不出 Bundle ID（{error}），请手动输入[/yellow]")
+
+    bundle_id = Prompt.ask("Bundle ID", default=detected or "com.example.myapp")
+    app_name = Prompt.ask("App 名称（后台显示用）", default="ipasign app")
     devices = _detect_devices()
     udid = _pick_device(devices) if devices and Confirm.ask("注册已连接的设备？", default=True) else None
 

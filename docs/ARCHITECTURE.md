@@ -247,3 +247,18 @@ usbmuxd 负责按 UDID 把连接路由到 USB 或网络设备。
 
 list_devices(wifi=...) 用 DeviceInfo.transport（usb / wifi）过滤，
 install_ipa(..., wifi=True) 找不到网络设备时会给出上面的指引。
+
+## 九、已知问题：0xe8008019
+
+自研引擎生成的签名在以下场景会被 iOS 拒绝（`0xe8008019`），而 OpenSSL 校验通过：
+
+- 带 **多架构（fat）framework** 的包
+- `Frameworks/` 下存在**独立 dylib**
+
+已逐项对齐并排除的因素：文件大小、段表、`codeLimit` / `datasize`、代码页哈希、
+CodeDirectory 全部头部字段、entitlements（XML + DER）、资源封印（文件列表与哈希）、
+Info.plist 内容与格式、requirements、CMS 结构/属性/证书顺序。
+
+排查方法：用 zsign 对同一个包签名作为对照，再「替换单个二进制」二分定位。
+目前结论是差异落在 Apple 侧 CMS 校验的某个严格点上，尚未定位；`--engine zsign`
+是临时后备方案。

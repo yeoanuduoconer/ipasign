@@ -105,8 +105,8 @@ ipasign renew <条目名> 原版.ipa -o 已签名.ipa -p <p12密码> --install
 | `ipasign login --account <Apple ID>` | 登录 Apple ID，换取开发者会话并列出团队 |
 | `ipasign issue --bundle-id <id>` | 申请开发证书 / App ID / 描述文件并入库 |
 | `ipasign issue ... --reuse <条目>` | 复用已有证书，只申请新描述文件（免费账号必用） |
-| `ipasign sign <ipa>` | 用指定 p12 + 描述文件重签名 |
-| `ipasign renew <条目> <ipa>` | 从证书库取身份并重签，可 `--install` |
+| `ipasign sign <ipa>` | 用指定 p12 + 描述文件重签名（`--engine zsign` 走后备引擎） |
+| `ipasign renew <条目> <ipa>` | 从证书库取身份并重签，可 `--install`、`--engine zsign` |
 | `ipasign install <ipa> --udid <udid>` | 安装到设备 |
 | `ipasign verify <ipa>` | 校验签名结构（CodeDirectory / CMS / 资源封印） |
 | `ipasign doctor <ipa> --vault <条目>` | 签名体检 |
@@ -159,6 +159,17 @@ ipasign/
 **证书工厂**（`apple/issue.py`）：登录后拿到 Xcode 应用令牌，调用开发者接口：`addDevice` → `submitDevelopmentCSR` → `addAppId` → `downloadTeamProvisioningProfile`。私钥全程本地生成，只有 CSR 和公钥离开本机。
 
 **设备证明**（`apple/anisette/`）：向 Apple 申请 SPIM → 用本机硬件指纹生成 CPIM → 换取 PTM/信任密钥 → 落地 `adi.pb`。之后每次请求用它生成 `X-Apple-I-MD` 一次性口令。
+
+## 已知限制
+
+自研签名引擎在多数 App 上与 zsign 逐字段一致，但**部分复杂包（多架构 framework + 独立 dylib）目前仍会被 iOS 以 `0xe8008019` 拒绝**，尽管签名本身通过 OpenSSL 校验。这类包可以切换到后备引擎：
+
+```bash
+ipasign sign app.ipa -o out.ipa -c id.p12 -m profile.mobileprovision --engine zsign
+ipasign renew <条目> app.ipa -o out.ipa -p <密码> --engine zsign --install
+```
+
+zsign 是独立的 GPLv3 程序，**本项目不打包它**：自行下载后设置 `IPASIGN_ZSIGN` 指向可执行文件即可。默认引擎仍是自研的 `native`。
 
 ## 使用须知
 

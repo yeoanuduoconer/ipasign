@@ -40,26 +40,32 @@
 
 ### 下载即用（零依赖）
 
-仓库根目录已经附带打包好的可执行文件：
+仓库根目录带一个自带运行时的可执行文件，以及一个注册脚本：
 
 ```
-ipasign.exe        （Windows x64，约 80 MB）
+ipasign.exe        约 80 MB（内置 Python、依赖库、原生登录库）
+setup.cmd          一次性注册命令
 ```
 
-它内部包含了 **Python 运行时、全部依赖库、原生登录库**，所以：
+**空系统上的用法（两步）：**
 
-- 空系统上不需要装 Python
-- 不需要 pip / virtualenv
-- 不需要编译器、不需要 vcpkg、不需要任何 `tools` 目录
+1. 双击 `setup.cmd`。
 
-下载仓库（或解压 zip）后，在项目目录里：
+   它在 `%LOCALAPPDATA%\Microsoft\WindowsApps\`（系统默认就在 PATH 里）建立一个
+   **硬链接**指向本目录的 `ipasign.exe`：同一份数据、两个名字，**不额外占用磁盘**。
+   跨盘符时自动退化为约 1 KB 的 `.cmd` 垫片，同样不会复制 80 MB。
+   不改 PATH、不需要管理员、不用重开终端。
 
-```powershell
-.\ipasign.exe            # 交互式界面
-.\ipasign.exe selfcheck  # 检查依赖、路径、设备、证书库
-```
+2. 打开任意终端（PowerShell / cmd / Windows Terminal），输入：
 
-双击也可以直接打开。
+   ```
+   ipasign
+   ```
+
+卸载：删除 `%LOCALAPPDATA%\Microsoft\WindowsApps\ipasign.exe` 即可。
+
+不想注册命令，也可以直接在项目目录里运行：PowerShell 下 `.\ipasign.exe`，
+cmd 下直接 `ipasign`。
 
 **唯一的系统级前提**：如果要「插线装到 iPhone/iPad」，Windows 需要 Apple 的
 USB 驱动（iTunes 或「Apple Devices」应用，装一次即可）。这是设备驱动，

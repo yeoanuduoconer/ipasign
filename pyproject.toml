@@ -41,3 +41,12 @@ include = ["ipasign*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.setuptools.package-data]
+ipasign = [
+    "native/*/*.dll",
+    "native/*/*.so",
+    "native/*/*.dylib",
+    "native/*.md",
+    "vendor/apple-auth.LICENSE",
+]

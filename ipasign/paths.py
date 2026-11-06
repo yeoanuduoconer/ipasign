@@ -29,6 +29,7 @@ Environment variables
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import sys
 from pathlib import Path
@@ -79,13 +80,36 @@ def _package_neighbours() -> List[Path]:
     return candidates
 
 
+def platform_tag() -> str:
+    """``win-x64`` / ``macos-arm64`` / ``linux-x64`` …"""
+    machine = platform.machine().lower()
+    arch = "arm64" if machine in ("arm64", "aarch64") else "x64"
+    if sys.platform == "win32":
+        return f"win-{arch}"
+    if sys.platform == "darwin":
+        return f"macos-{arch}"
+    return f"linux-{arch}"
+
+
+def bundled_native_dirs() -> List[Path]:
+    """Native libraries shipped inside the package (no build required)."""
+    base = Path(__file__).resolve().parent / "native"
+    return [base / platform_tag(), base]
+
+
+
 def native_dirs() -> List[Path]:
-    """Directories searched for the apple-auth native libraries."""
+    """Directories searched for the apple-auth native libraries.
+
+    Order: explicit override, per-user install, bundled build (works out of
+    the box), development layouts, platform application data.
+    """
     dirs: List[Path] = []
     extra = os.environ.get("IPASIGN_NATIVE_DIR")
     if extra:
         dirs.append(Path(extra).expanduser())
     dirs.append(data_dir() / "native")
+    dirs.extend(bundled_native_dirs())
     dirs.extend(_package_neighbours())
     dirs.extend(_platform_data_dirs())
     # de-duplicate while keeping the order

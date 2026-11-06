@@ -73,3 +73,40 @@ def test_auth_library_env_override(monkeypatch, tmp_path):
     library.write_bytes(b"dll")
     monkeypatch.setenv("APPLE_AUTH_LIBRARY", str(library))
     assert auth.library_path() == library
+
+
+def test_platform_tag_shape():
+    tag = paths.platform_tag()
+    assert tag.startswith(("win-", "macos-", "linux-"))
+    assert tag.endswith(("x64", "arm64"))
+
+
+def test_bundled_dirs_are_inside_package():
+    package_dir = Path(paths.__file__).resolve().parent
+    for directory in paths.bundled_native_dirs():
+        assert package_dir in directory.parents
+
+
+def test_find_native_falls_back_to_bundled(monkeypatch, tmp_path):
+    monkeypatch.setenv("IPASIGN_HOME", str(tmp_path))
+    monkeypatch.delenv("IPASIGN_NATIVE_DIR", raising=False)
+    found = paths.find_native("apple_auth_client.dll")
+    if found is None:
+        # platform without a bundled build (macOS/Linux CI): nothing to assert
+        return
+    assert "native" in str(found)
+
+
+def test_bundled_libraries_load(monkeypatch, tmp_path):
+    """The shipped DLLs must be loadable without a user install."""
+    monkeypatch.setenv("IPASIGN_HOME", str(tmp_path))
+    monkeypatch.delenv("APPLE_AUTH_LIBRARY", raising=False)
+    from ipasign.apple import auth
+
+    try:
+        library = auth.library_path()
+    except auth.AppleAuthUnavailable:
+        return  # no bundled build for this platform
+    import ctypes
+
+    ctypes.CDLL(str(library))  # raises OSError if dependencies are missing

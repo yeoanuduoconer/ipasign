@@ -63,7 +63,9 @@ cmake -S apple-auth -B apple-auth-client -G "Visual Studio 17 2022" -A x64 \
 cmake --build apple-auth-client --config Release
 ```
 
-然后让 `ipasign` 找到它。按以下顺序查找，任选一种即可：
+**Windows x64 已经内置**（`ipasign/native/win-x64/`），无需编译即可使用登录与证书申请。
+其他平台（macOS / Linux / Windows ARM64）需要自行编译一次。编译后让 `ipasign` 找到它，
+按以下顺序查找：
 
 1. **环境变量**（最直接）
 

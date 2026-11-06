@@ -38,6 +38,20 @@ class DeviceInfo:
         bits = [self.name or "未命名设备", self.product_type or "?", f"iOS {self.ios_version or '?'}"]
         return " / ".join(bits)
 
+    @property
+    def transport(self) -> str:
+        """`usb` / `wifi` / `unknown`, normalised from usbmuxd."""
+        value = (self.connection or "").lower()
+        if "usb" in value:
+            return "usb"
+        if "network" in value or "wifi" in value or "wlan" in value:
+            return "wifi"
+        return "unknown"
+
+    @property
+    def is_wifi(self) -> bool:
+        return self.transport == "wifi"
+
 
 def library_available() -> bool:
     import importlib.util
@@ -61,13 +75,22 @@ def _cli(*args: str, timeout: int = 120) -> subprocess.CompletedProcess:
     )
 
 
-def list_devices() -> List[DeviceInfo]:
-    """Return every device visible over USB or Wi-Fi (empty list when none)."""
+def list_devices(wifi: Optional[bool] = None) -> List[DeviceInfo]:
+    """Devices visible to usbmuxd (USB and Wi-Fi).
+
+    `wifi=True` keeps network devices only, `wifi=False` USB only;
+    `None` returns both.
+    """
     _require_library()
     try:
-        return asyncio.run(_list_devices_async())
+        devices = asyncio.run(_list_devices_async())
     except Exception:  # noqa: BLE001 - older/newer API shapes, fall back to the CLI
-        return _list_via_cli()
+        devices = _list_via_cli()
+    if wifi is True:
+        return [device for device in devices if device.is_wifi]
+    if wifi is False:
+        return [device for device in devices if not device.is_wifi]
+    return devices
 
 
 async def _list_devices_async() -> List[DeviceInfo]:
@@ -96,8 +119,9 @@ async def _list_devices_async() -> List[DeviceInfo]:
     return devices
 
 
-def _list_via_cli() -> List[DeviceInfo]:
-    process = _cli("usbmux", "list")
+def _list_via_cli(network_only: bool = False) -> List[DeviceInfo]:
+    args = ["usbmux", "list"] + (["--network"] if network_only else [])
+    process = _cli(*args)
     if process.returncode != 0:
         return []
     try:
@@ -140,9 +164,15 @@ def install_ipa(
     *,
     udid: Optional[str] = None,
     developer: bool = False,
+    wifi: bool = False,
     log=lambda message: None,
 ) -> str:
-    """Install *ipa_path* on a connected device; returns the target UDID."""
+    """Install *ipa_path* on a connected device; returns the target UDID.
+
+    With `wifi=True` the device must already be paired for Wi-Fi sync, i.e.
+    usbmuxd has to list it as a network device; the transfer itself then goes
+    over the air with no cable attached.
+    """
     _require_library()
     path = Path(ipa_path)
     if not path.is_file():
@@ -150,7 +180,14 @@ def install_ipa(
     if path.suffix.lower() not in (".ipa", ".app"):
         raise DeviceError("只支持 .ipa 或 .app")
 
-    devices = list_devices()
+    devices = list_devices(wifi=True if wifi else None)
+    if not devices and wifi:
+        raise DeviceError(
+            "没有发现可通过 Wi-Fi 连接的设备。\n"
+            "  1) 先用数据线连一次，在 iTunes（Windows）或 Finder（macOS）里勾选「通过 Wi-Fi 同步」；\n"
+            "  2) 手机和电脑连同一个局域网，手机保持解锁；\n"
+            "  3) 之后拔掉数据线，ipasign devices --wifi 应该能看到它。"
+        )
     if not devices:
         raise DeviceError(
             "没有检测到设备。请确认：\n"
@@ -167,7 +204,7 @@ def install_ipa(
         udid = devices[0].udid
     target = next((device for device in devices if device.udid == udid), None)
     if target is not None:
-        log(f"目标设备: {target.label()} ({target.udid})")
+        log(f"目标设备: {target.label()} ({target.udid}, {target.transport})")
 
     command = [sys.executable, "-m", "pymobiledevice3", "apps", "install", str(path)]
     if udid:

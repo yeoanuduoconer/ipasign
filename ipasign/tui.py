@@ -107,11 +107,11 @@ def _load_identity(entry: vault.StoredIdentity, password: Optional[str] = None):
     return pki.load_identity(entry.p12_path, password)
 
 
-def _detect_devices() -> List:
+def _detect_devices(wifi: bool | None = None) -> List:
     try:
         from .device import list_devices
 
-        return list_devices()
+        return list_devices(wifi=wifi)
     except Exception:  # noqa: BLE001 - best effort
         return []
 
@@ -168,7 +168,8 @@ def render_home() -> None:
         ("5", "签名体检（doctor）"),
         ("6", "证书库管理"),
         ("7", "设备与驱动信息"),
-        ("8", "关于 / 路径"),
+        ("8", "自动续签（到期自动重签重装）"),
+        ("9", "关于 / 路径"),
         ("0", "退出"),
     ):
         menu.add_row(key, label)
@@ -277,12 +278,14 @@ def screen_install(default_ipa: Optional[Path] = None) -> None:
         console.print(f"安装: [bold]{source}[/bold]")
     if not source:
         return
-    udid = _pick_device(_detect_devices())
+    wifi = Confirm.ask("通过 Wi-Fi 安装（需已配对 Wi-Fi 同步）？", default=False)
+    devices = _detect_devices(wifi=True if wifi else None)
+    udid = _pick_device(devices)
     if not udid:
         return
     try:
         with console.status("[cyan]上传并安装中（大文件需要几分钟）…[/cyan]"):
-            install_ipa(source, udid=udid, log=_logger())
+            install_ipa(source, udid=udid, wifi=wifi, log=_logger())
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]安装失败:[/red] {exc}")
         return
@@ -345,6 +348,49 @@ def screen_devices() -> None:
     console.print(table)
 
 
+
+
+def screen_watch() -> None:
+    from . import watch
+
+    jobs = watch.load_jobs()
+    table = Table(title="自动续签任务")
+    for column in ("ID", "IPA", "证书库", "设备", "上次结果"):
+        table.add_column(column)
+    for job in jobs:
+        table.add_row(job.id, Path(job.ipa).name, job.vault, job.udid or "自动", job.last_result or "-")
+    console.print(table if jobs else "[yellow]还没有任务[/yellow]")
+
+    choice = Prompt.ask("1 添加 / 2 立即续签 / 3 启动守护 / 0 返回", default="0")
+    if choice == "1":
+        source = _ask_path("要续签的 IPA（原始或已签名都行）")
+        if not source:
+            return
+        entry = _choose_vault_entry("用哪套证书续签")
+        if not entry:
+            return
+        udid = _pick_device(_detect_devices())
+        wifi = Confirm.ask("续签后用 Wi-Fi 安装？", default=False)
+        save_password = Confirm.ask("保存 p12 密码？（明文存进任务文件）", default=False)
+        password = Prompt.ask("p12 密码", default="ipasign", password=True) if save_password else None
+        job = watch.add_job(
+            source, entry.name, udid=udid, wifi=wifi,
+            password=password,
+        )
+        console.print(f"[green]已添加[/green] {job.id} -> {job.output_path()}")
+    elif choice == "2":
+        with console.status("[cyan]检查并续签…[/cyan]"):
+            results = watch.run_once(log=_logger())
+        for job_id, result in results.items():
+            console.print(f"  {job_id}: {result}")
+    elif choice == "3":
+        interval = Prompt.ask("检查间隔（分钟）", default="60")
+        try:
+            watch.run_forever(interval_minutes=float(interval), log=_logger())
+        except KeyboardInterrupt:
+            console.print("[dim]已停止[/dim]")
+
+
 def screen_about() -> None:
     from .apple import auth
 
@@ -374,7 +420,8 @@ ACTIONS = {
     "5": screen_doctor,
     "6": screen_vault,
     "7": screen_devices,
-    "8": screen_about,
+    "8": screen_watch,
+    "9": screen_about,
 }
 
 

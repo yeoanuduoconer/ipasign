@@ -310,11 +310,14 @@ def cmd_devices(args: argparse.Namespace) -> int:
             "缺少 pymobiledevice3，无法与手机通信。安装：\n"
             "  python -m pip install pymobiledevice3"
         )
-    devices = device.list_devices()
+    devices = device.list_devices(wifi=True if getattr(args, "wifi", False) else None)
     if args.json:
         print(json.dumps([item.__dict__ for item in devices], ensure_ascii=False, indent=2))
         return 0 if devices else 1
     if not devices:
+        if getattr(args, "wifi", False):
+            print("没有发现 Wi-Fi 设备。请先用数据线连一次，在 iTunes/Finder 里勾选「通过 Wi-Fi 同步」。")
+            return 1
         print("没有检测到设备。请确认：")
         print("  1) 手机用数据线连上电脑；")
         print("  2) 手机解锁，并在弹窗里点「信任」；")
@@ -322,7 +325,7 @@ def cmd_devices(args: argparse.Namespace) -> int:
         return 1
     for item in devices:
         marker = "" if item.paired else "  [未配对]"
-        print(f"{item.udid}  {item.label()}  [{item.connection or 'USB'}]{marker}")
+        print(f"{item.udid}  {item.label()}  [{item.transport}]{marker}")
         if item.extra.get("pairing_error"):
             print(f"    配对失败: {item.extra['pairing_error'][:160]}")
     return 0
@@ -343,7 +346,11 @@ def cmd_install(args: argparse.Namespace) -> int:
             raise IpasignError("签名校验未通过，已中止安装（加 --no-verify 可跳过）")
 
     udid = device.install_ipa(
-        ipa_path, udid=args.udid, developer=args.developer, log=log
+        ipa_path,
+        udid=args.udid,
+        developer=args.developer,
+        wifi=getattr(args, "wifi", False),
+        log=log,
     )
     print(f"[完成] 已安装到设备 {udid}")
     print("如果图标是灰色的，去 设置 → 通用 → VPN与设备管理 里信任对应证书。")
@@ -630,6 +637,64 @@ def cmd_tui(args: argparse.Namespace) -> int:
     return tui_main()
 
 
+def cmd_watch(args: argparse.Namespace) -> int:
+    from . import watch
+
+    action = args.action
+    if action == "add":
+        job = watch.add_job(
+            args.ipa,
+            args.vault,
+            udid=args.udid,
+            output=args.output,
+            password=args.password if args.save_password else None,
+            wifi=args.wifi,
+            interval_hours=args.interval_hours,
+            job_id=args.id,
+        )
+        print(f"[完成] 已添加续签任务 {job.id}")
+        print(f"  {job.describe()}")
+        print(f"  输出: {job.output_path()}")
+        if args.password and not args.save_password:
+            print("  提示: 未保存密码，watch run/start 时会询问")
+        return 0
+    if action == "list":
+        jobs = watch.load_jobs()
+        if not jobs:
+            print("还没有续签任务。用 ipasign watch add <ipa> --vault <条目> 添加。")
+            return 0
+        for job in jobs:
+            print(f"{job.describe()}")
+            print(f"    上次: {job.last_run or '-'}  结果: {job.last_result or '-'}")
+            if job.last_error:
+                print(f"    错误: {job.last_error[:120]}")
+        return 0
+    if action == "rm":
+        if watch.remove_job(args.id):
+            print(f"[完成] 已删除 {args.id}")
+            return 0
+        print(f"[错误] 没有找到任务 {args.id}", file=sys.stderr)
+        return 1
+    if action == "run":
+        results = watch.run_once(
+            threshold_hours=args.threshold_hours, force=args.force, log=_log_factory(False, False)
+        )
+        if not results:
+            print("还没有续签任务。")
+            return 0
+        for job_id, result in results.items():
+            print(f"  {job_id}: {result}")
+        return 0 if all(not str(v).startswith("failed") for v in results.values()) else 1
+    if action == "start":
+        watch.run_forever(
+            interval_minutes=args.interval_minutes,
+            threshold_hours=args.threshold_hours,
+            log=_log_factory(False, False),
+        )
+        return 0
+    raise IpasignError(f"未知操作: {action}")
+
+
 def cmd_fetch_certs(args: argparse.Namespace) -> int:
     from ipasign.core.pki import cert_cache_dir, download_apple_certificates
 
@@ -732,12 +797,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     devices = subparsers.add_parser("devices", help="列出已连接的 iPhone / iPad")
     devices.add_argument("--json", action="store_true")
+    devices.add_argument("--wifi", action="store_true", help="只看 Wi-Fi 连接的设备")
     devices.set_defaults(func=cmd_devices)
 
     install = subparsers.add_parser("install", help="把已签名的 IPA 安装到设备")
     install.add_argument("ipa")
     install.add_argument("--udid", help="目标设备 UDID（连接多台设备时必填）")
     install.add_argument("--developer", action="store_true", help="作为开发者包安装")
+    install.add_argument("--wifi", action="store_true", help="通过 Wi-Fi 安装（需先配对 Wi-Fi 同步）")
     install.add_argument("--verify", dest="verify", action="store_true", help="安装前校验签名结构")
     install.add_argument("--no-verify", dest="verify", action="store_false", help="跳过安装前校验")
     install.add_argument("-v", "--verbose", action="store_true")
@@ -758,6 +825,40 @@ def build_parser() -> argparse.ArgumentParser:
 
     tui = subparsers.add_parser("tui", help="启动交互式终端界面")
     tui.set_defaults(func=cmd_tui)
+
+    watch_parser = subparsers.add_parser(
+        "watch", help="自动续签：到期前自动重签并重装"
+    )
+    watch_sub = watch_parser.add_subparsers(dest="action", required=True)
+
+    p = watch_sub.add_parser("add", help="添加一个续签任务")
+    p.add_argument("ipa")
+    p.add_argument("--vault", required=True, help="证书库条目名")
+    p.add_argument("--udid", help="目标设备（省略则运行时自动选择）")
+    p.add_argument("--output", help="重签后的输出路径（默认 <名字>-renewed.ipa）")
+    p.add_argument("--password", help="p12 密码（配合 --save-password 才会保存）")
+    p.add_argument("--save-password", action="store_true", help="把 p12 密码存进任务文件（明文）")
+    p.add_argument("--wifi", action="store_true", help="续签后用 Wi-Fi 安装")
+    p.add_argument("--interval-hours", type=float, default=24.0)
+    p.add_argument("--id", help="任务名（默认随机）")
+    p.set_defaults(func=cmd_watch)
+
+    p = watch_sub.add_parser("list", help="列出续签任务")
+    p.set_defaults(func=cmd_watch)
+
+    p = watch_sub.add_parser("rm", help="删除续签任务")
+    p.add_argument("id")
+    p.set_defaults(func=cmd_watch)
+
+    p = watch_sub.add_parser("run", help="立即检查并续签一次")
+    p.add_argument("--force", action="store_true", help="忽略到期时间，强制续签")
+    p.add_argument("--threshold-hours", type=float, default=24.0)
+    p.set_defaults(func=cmd_watch)
+
+    p = watch_sub.add_parser("start", help="启动守护循环，定期检查")
+    p.add_argument("--interval-minutes", type=float, default=60.0)
+    p.add_argument("--threshold-hours", type=float, default=24.0)
+    p.set_defaults(func=cmd_watch)
 
     fetch = subparsers.add_parser("fetch-certs", help="下载并缓存 Apple WWDR 中间证书")
     fetch.add_argument("--force", action="store_true")

@@ -124,7 +124,8 @@ ipasign/
 ├── app.py              # 入口：无参数进 TUI，有参数走 CLI
 ├── tui.py              # rich 终端界面
 ├── cli.py              # argparse 命令
-├── device.py           # pymobiledevice3 装机
+├── device.py           # pymobiledevice3 装机（USB / Wi-Fi）
+├── watch.py            # 自动续签任务与守护循环
 ├── core/               # 签名引擎（与 Apple 服务无关，可独立使用）
 │   ├── macho.py        #   Mach-O 解析与代码签名重建
 │   ├── cms.py          #   CMS/PKCS#7 签名与校验
@@ -165,6 +166,8 @@ ipasign/
 - **自动复用**：同一个 Bundle ID 重复签时，工具会复用已有的 App ID 和证书（不会重复创建、不消耗配额）；Apple 报「证书名额已满」时会自动回退到证书库里的证书。
 - **开发者模式**：iOS 16+ 首次运行开发签名的 App，需要在 `设置 → 隐私与安全性 → 开发者模式` 打开并重启。
 - **信任证书**：首次安装后在 `设置 → 通用 → VPN与设备管理` 里信任你的开发者证书。
+- **Wi-Fi 安装**：先用数据线连一次，在 iTunes（Windows）/ Finder（macOS）里勾选「通过 Wi-Fi 同步」，之后 ipasign devices --wifi 能看到设备，ipasign install --wifi 就能无线安装。
+- **自动续签**：ipasign watch add app.ipa --vault <条目> --udid <UDID>，之后 ipasign watch run（检查一次）或 ipasign watch start（守护循环）。任务存在 ~/.ipasign/renewals.json，**默认不保存 p12 密码**（运行时提示；加 --save-password 才会明文保存）。
 - **限流**：Apple 对登录和证书申请有频率限制，HTTP 503 时等 30–60 分钟或换网络。
 - **只签你有权处理的 App**：本工具不绕过 App Store 的 DRM，也不为盗版内容提供便利。
 

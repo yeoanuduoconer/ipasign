@@ -98,6 +98,7 @@ def build_detached_cms(
     *,
     signing_time: Optional[_dt.datetime] = None,
     cdhash: Optional[bytes] = None,
+    signer: Optional[x509.Certificate] = None,
 ) -> bytes:
     """Return a DER encoded detached ``SignedData`` over *content*.
 
@@ -136,7 +137,12 @@ def build_detached_cms(
                 ),
             )
         )
-        plist_payload = plistlib.dumps({"cdhashes": [cdhash]}, fmt=plistlib.FMT_XML)
+        # Apple's flexibility plist carries the *truncated* cdhash: the first
+        # 20 bytes of the SHA-256 digest.  A full 32-byte value makes iOS
+        # reject the whole signature with 0xe8008019.
+        plist_payload = plistlib.dumps(
+            {"cdhashes": [cdhash[:20]]}, fmt=plistlib.FMT_XML
+        )
         attrs.append(
             der.sequence(
                 der.oid(OID_CDHASHES), der.set_of(der.octet_string(plist_payload))
@@ -149,9 +155,10 @@ def build_detached_cms(
     # Inside SignerInfo the same bytes appear with an implicit [0] tag.
     signed_attrs_field = b"\xa0" + attrs_der[1:]
 
+    signer_cert = signer if signer is not None else certificates[0]
     signer_info = der.sequence(
         der.integer(1),
-        _signer_identifier(certificates[0]),
+        _signer_identifier(signer_cert),
         _algorithm_identifier(OID_SHA256),
         signed_attrs_field,
         _signature_algorithm(key),

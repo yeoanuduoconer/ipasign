@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-STATE_DIR = Path.home() / ".ipasign" / "apple-auth-device"
+STATE_DIR = Path.home() / ".ipasign" / "apple-auth-device-mac"
 LIBRARY_CANDIDATES = (
     Path(r"E:\tools\ipasign\apple-auth-client\Release\apple_auth_client.dll"),
     Path(r"E:\tools\ipasign\apple-auth-build\Release\apple_auth_client.dll"),
@@ -62,10 +62,14 @@ def _import_device():
 
 
 def open_device(state: "str | Path | None" = None):
-    """Open (and provision on first use) a Windows device identity."""
+    """Open (and provision on first use) a Mac device identity.
+
+    Xcode's application token (com.apple.gs.xcode.auth) matches a macOS device
+    profile; a Windows identity is rejected with -80046.
+    """
     Device = _import_device()
     target = Path(state) if state else STATE_DIR
-    return Device.windows(str(target))
+    return Device.mac(str(target))
 
 
 def login(email: str, password: Optional[str] = None, state=None):

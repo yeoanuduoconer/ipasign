@@ -544,9 +544,14 @@ def cmd_login(args: argparse.Namespace) -> int:
 
     print(f"[..] 原生客户端: {library}")
     print(f"[..] 设备身份目录: {apple_auth_bridge.STATE_DIR}")
-    print("     首次使用会自动申请 ADI（需要几秒）")
     try:
-        device, session = apple_auth_bridge.login(args.account, args.password)
+        device = apple_auth_bridge.open_device()
+        session = None if args.fresh else device.session
+        if session is not None:
+            print("[..] 复用已保存的登录会话（--fresh 可强制重新登录）")
+        else:
+            print("     首次使用会自动申请 ADI（需要几秒）")
+            device, session = apple_auth_bridge.login(args.account, args.password)
     except Exception as exc:  # noqa: BLE001 - native errors
         message = str(exc)
         if "503" in message:
@@ -751,6 +756,7 @@ def build_parser() -> argparse.ArgumentParser:
     login = subparsers.add_parser("login", help="用 Apple ID 登录，申请证书与描述文件")
     login.add_argument("--account", required=True, help="Apple ID 邮箱")
     login.add_argument("--password", help="省略则在本机安全提示输入（推荐）")
+    login.add_argument("--fresh", action="store_true", help="忽略已保存会话，强制重新登录")
     login.set_defaults(func=cmd_login)
 
     gui = subparsers.add_parser("gui", help="启动图形界面")

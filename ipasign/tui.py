@@ -149,7 +149,14 @@ def render_home() -> None:
     status.add_column(style="dim")
     status.add_column()
     status.add_row("版本", f"[bold]{__version__}[/bold]")
-    status.add_row("证书库", f"{len(entries)} 套" + (": " + ", ".join(e.name for e in entries) if entries else ""))
+    status.add_row(
+        "证书库",
+        f"{len(entries)} 套" + (": " + ", ".join(e.name for e in entries) if entries else " [yellow](空)[/yellow]"),
+    )
+    status.add_row(
+        "登录",
+        "[green]已登录[/green]" if _has_session() else "[yellow]未登录[/yellow]",
+    )
     status.add_row(
         "设备",
         ", ".join(f"{d.name} ({d.ios_version})" for d in devices) if devices else "[yellow]未检测到[/yellow]",
@@ -174,6 +181,40 @@ def render_home() -> None:
     ):
         menu.add_row(key, label)
     console.print(menu)
+
+
+def _has_session() -> bool:
+    """True when a saved Apple ID session exists."""
+    try:
+        from .apple import auth
+
+        return auth.open_device().session is not None
+    except Exception:  # noqa: BLE001 - native library missing / not logged in
+        return False
+
+
+def _ensure_login() -> bool:
+    """Log in on the spot when an action needs a session."""
+    if _has_session():
+        return True
+    console.print("[yellow]这个操作需要先登录 Apple ID。[/yellow]")
+    if not Confirm.ask("现在登录？", default=True):
+        console.print("[dim]已取消。可以稍后从主菜单选 1 登录。[/dim]")
+        return False
+    screen_login()
+    return _has_session()
+
+
+def _ensure_vault(minimum: int = 1) -> bool:
+    """Make sure the vault has an identity, offering to create one."""
+    if len(vault.list_all()) >= minimum:
+        return True
+    console.print("[yellow]证书库是空的。[/yellow]")
+    if not Confirm.ask("现在申请一套证书 + 描述文件？", default=True):
+        console.print("[dim]已取消。可以稍后从主菜单选 2 申请。[/dim]")
+        return False
+    screen_issue()
+    return len(vault.list_all()) >= minimum
 
 
 def screen_login() -> None:
@@ -204,6 +245,8 @@ def screen_login() -> None:
 def screen_issue() -> None:
     from .apple.issue import issue
 
+    if not _ensure_login():
+        return
     bundle_id = Prompt.ask("Bundle ID", default="com.example.myapp")
     app_name = Prompt.ask("App 名称", default="ipasign app")
     devices = _detect_devices()
@@ -239,6 +282,8 @@ def screen_issue() -> None:
 def screen_sign() -> None:
     source = _ask_path("IPA 路径（可直接拖进来）")
     if not source:
+        return
+    if not _ensure_vault():
         return
     entry = _choose_vault_entry("用哪套证书签名")
     if not entry:

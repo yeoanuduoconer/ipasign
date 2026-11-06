@@ -10,7 +10,7 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from . import __version__, bundle, device, ipa, macho
 from . import doctor as doctor_mod
@@ -532,6 +532,75 @@ def cmd_identity(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_login(args: argparse.Namespace) -> int:
+    """Log in through the native apple-auth client and list developer teams."""
+    from . import apple_auth_bridge
+
+    try:
+        library = apple_auth_bridge.library_path()
+    except apple_auth_bridge.AppleAuthUnavailable as exc:
+        print(f"[错误] {exc}", file=sys.stderr)
+        return 1
+
+    print(f"[..] 原生客户端: {library}")
+    print(f"[..] 设备身份目录: {apple_auth_bridge.STATE_DIR}")
+    print("     首次使用会自动申请 ADI（需要几秒）")
+    try:
+        device, session = apple_auth_bridge.login(args.account, args.password)
+    except Exception as exc:  # noqa: BLE001 - native errors
+        print(f"[错误] 登录失败: {exc}", file=sys.stderr)
+        return 1
+
+    print("[完成] 登录成功")
+    try:
+        headers = apple_auth_bridge.developer_headers(device, session)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[错误] 无法取得开发者会话: {exc}", file=sys.stderr)
+        return 1
+
+    teams = _fetch_developer_teams(headers)
+    if teams:
+        print("[完成] 开发者团队:")
+        for team in teams:
+            print(
+                f"  {team.get('name', '?')}  teamId={team.get('teamId', '?')}  "
+                f"type={team.get('type', '?')}"
+            )
+    else:
+        print("[!] 未取到团队列表（账号可能还没加入开发者计划）")
+    return 0
+
+
+def _fetch_developer_teams(headers: Dict[str, str]) -> List[Dict]:
+    import plistlib
+    import uuid
+
+    import requests
+
+    bundle = Path.home() / ".ipasign" / "ca-bundle.pem"
+    body = {
+        "clientId": "XABBG36SBA",
+        "protocolVersion": "QH65B2",
+        "requestId": str(uuid.uuid4()).upper(),
+        "userLocale": "en_US",
+    }
+    response = requests.post(
+        "https://developerservices2.apple.com/services/QH65B2/listTeams.action?clientId=XABBG36SBA",
+        data=plistlib.dumps(body),
+        headers={**headers, "Content-Type": "text/x-xml-plist"},
+        verify=str(bundle) if bundle.is_file() else True,
+        timeout=40,
+    )
+    if response.status_code != 200:
+        print(f"[!] listTeams HTTP {response.status_code}", file=sys.stderr)
+        return []
+    try:
+        payload = plistlib.loads(response.content)
+    except Exception:  # noqa: BLE001
+        return []
+    return payload.get("teams", []) or []
+
+
 def cmd_fetch_certs(args: argparse.Namespace) -> int:
     from .pki import cert_cache_dir, download_apple_certificates
 
@@ -668,6 +737,11 @@ def build_parser() -> argparse.ArgumentParser:
     fetch = subparsers.add_parser("fetch-certs", help="下载并缓存 Apple WWDR 中间证书")
     fetch.add_argument("--force", action="store_true")
     fetch.set_defaults(func=cmd_fetch_certs)
+
+    login = subparsers.add_parser("login", help="用 Apple ID 登录，申请证书与描述文件")
+    login.add_argument("--account", required=True, help="Apple ID 邮箱")
+    login.add_argument("--password", help="省略则在本机安全提示输入（推荐）")
+    login.set_defaults(func=cmd_login)
 
     gui = subparsers.add_parser("gui", help="启动图形界面")
     gui.set_defaults(func=cmd_gui)

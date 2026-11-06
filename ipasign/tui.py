@@ -102,8 +102,13 @@ def _choose_vault_entry(title: str = "选择证书库条目") -> Optional[vault.
 
 
 def _load_identity(entry: vault.StoredIdentity, password: Optional[str] = None):
+    # Identities created by the certificate factory carry their generated
+    # container password in the vault metadata; only imported p12 files need
+    # the user to type one.
     if password is None:
-        password = Prompt.ask("p12 密码", default="ipasign", password=True)
+        password = vault.password_of(entry)
+    if password is None:
+        password = Prompt.ask("p12 密码", password=True)
     return pki.load_identity(entry.p12_path, password)
 
 
@@ -280,8 +285,6 @@ def screen_issue() -> None:
         if Confirm.ask("复用已有证书（免费账号只能有 1 张证书）？", default=True):
             entry = _choose_vault_entry("选择要复用的证书")
             reuse = entry.name if entry else None
-    password = Prompt.ask("新 p12 密码", default="ipasign")
-
     try:
         with console.status("[cyan]正在向 Apple 申请…[/cyan]"):
             result = issue(
@@ -289,7 +292,6 @@ def screen_issue() -> None:
                 app_name=app_name,
                 device_udid=udid,
                 reuse=reuse,
-                password=password,
             )
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]签发失败:[/red] {exc}")

@@ -402,7 +402,10 @@ def cmd_vault(args: argparse.Namespace) -> int:
 
     if action == "show":
         item = vault.load(args.name)
-        identity = load_identity(item.p12_path, args.password)
+        password = args.password or vault.password_of(item)
+        if not password:
+            password = getpass.getpass("p12 密码: ")
+        identity = load_identity(item.p12_path, password)
         profile = (
             ProvisioningProfile.load(item.profile_path) if item.profile_path else None
         )
@@ -437,7 +440,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     profile = None
     if args.vault:
         item = vault.load(args.vault)
-        identity = load_identity(item.p12_path, args.password)
+        password = args.password or vault.password_of(item)
+        if not password:
+            password = getpass.getpass("p12 密码: ")
+        identity = load_identity(item.p12_path, password)
         identity = ensure_chain(identity, allow_download=False, log=lambda m: None)
         if item.profile_path:
             profile = ProvisioningProfile.load(item.profile_path)
@@ -468,7 +474,10 @@ def cmd_renew(args: argparse.Namespace) -> int:
     item = vault.load(args.name)
     if item.profile_path is None:
         raise IpasignError(f"证书 {item.name!r} 没有配套描述文件，无法续签")
-    identity = load_identity(item.p12_path, args.password)
+    password = args.password or vault.password_of(item)
+    if not password:
+        password = getpass.getpass("p12 密码: ")
+    identity = load_identity(item.p12_path, password)
     identity = ensure_chain(identity, allow_download=True, log=log)
     profile = ProvisioningProfile.load(item.profile_path)
     if profile.is_expired():
@@ -488,7 +497,7 @@ def cmd_renew(args: argparse.Namespace) -> int:
             output,
             p12=item.p12_path,
             profile=item.profile_path,
-            password=args.password,
+            password=password,
             bundle_id=args.bundle_id or bundle_id_for_profile(profile),
             log=log,
         )
@@ -679,6 +688,7 @@ def cmd_issue(args: argparse.Namespace) -> int:
     print(f"  App ID     : {result['app_id_id']} ({result['bundle_id']})")
     print(f"  描述文件   : {result['profile_app_id']}")
     print(f"  证书库条目 : {result['name']}")
+    print("  p12 密码   : 已自动生成并保存在证书库，签名时自动使用")
     return 0
 
 
@@ -843,7 +853,9 @@ def build_parser() -> argparse.ArgumentParser:
     renew_parser.add_argument("name")
     renew_parser.add_argument("ipa")
     renew_parser.add_argument("-o", "--output")
-    renew_parser.add_argument("-p", "--password")
+    renew_parser.add_argument(
+        "-p", "--password", help="p12 密码（工具生成的条目会自动使用保存的密码）"
+    )
     renew_parser.add_argument("-b", "--bundle-id")
     renew_parser.add_argument("--install", action="store_true")
     renew_parser.add_argument("--udid")

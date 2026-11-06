@@ -16,6 +16,7 @@ can:
 from __future__ import annotations
 
 import base64
+import secrets
 import tempfile
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -179,7 +180,7 @@ def issue(
     device_name: str = "ipasign",
     vault_name: Optional[str] = None,
     reuse: Optional[str] = None,
-    password: str = "ipasign",
+    password: Optional[str] = None,
     log=print,
 ) -> Dict:
     """Create (or reuse) a certificate + profile for ``bundle_id``."""
@@ -213,6 +214,8 @@ def issue(
     log("[..] 下载描述文件")
     profile_bytes = client.download_profile(team_id, app_id["appIdId"])
 
+    if not password:
+        password = secrets.token_urlsafe(18)
     name = vault_name or f"{team_id}-{app_id['appIdId']}".lower()
     p12 = pkcs12.serialize_key_and_certificates(
         b"ipasign",
@@ -233,6 +236,7 @@ def issue(
             profile_path=profile_path,
             password=password,
             overwrite=True,
+            store_password=True,
         )
 
     log(f"[完成] 已存入证书库: {name}")

@@ -194,6 +194,12 @@ _PASSWORD_CACHE: Dict[str, str] = {}
 def _password_for(job: Job) -> str:
     if job.password:
         return job.password
+    try:
+        stored = vault.password_of(vault.load(job.vault))
+    except Exception:  # noqa: BLE001 - missing entry falls through to prompt
+        stored = None
+    if stored:
+        return stored
     if job.vault in _PASSWORD_CACHE:
         return _PASSWORD_CACHE[job.vault]
     value = getpass.getpass(f"证书 {job.vault} 的 p12 密码: ")

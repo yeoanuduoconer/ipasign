@@ -113,7 +113,7 @@ ipasign renew <条目名> 原版.ipa -o 已签名.ipa -p <p12密码> --install
 | `ipasign issue --bundle-id <id>` | 手动指定 Bundle ID 申请 |
 | `ipasign issue ... --reuse <条目>` | 复用已有证书，只申请新描述文件（免费账号必用） |
 | `ipasign sign <ipa>` | 用指定 p12 + 描述文件重签名（`--engine zsign` 走后备引擎） |
-| `ipasign renew <条目> <ipa>` | 从证书库取身份并重签，可 `--install`、`--engine zsign` |
+| `ipasign renew <条目> <ipa>` | 从证书库取身份并重签，可 `--install`（p12 密码自动读取） |
 | `ipasign install <ipa> [--udid <udid>] [--wifi]` | 安装到设备 |
 | `ipasign verify <ipa>` | 校验签名结构（CodeDirectory / CMS / 资源封印） |
 | `ipasign doctor <ipa> --vault <条目>` | 签名体检 |
@@ -207,7 +207,8 @@ ative 引擎）重签后，在 iOS 26.5 的 iPad 上实测安装成功：
 - Apple ID 密码只在本地 `getpass` 中读取，**不写入磁盘、不记录日志**。
 - 落盘的只有：`adi.pb`（设备身份）、`account-session.plist`（登录会话）、证书库里的 p12 与描述文件。
 - 所有配置在 `~/.ipasign/`，删除该目录即可完全重置。
-- p12 密码由你指定，工具不保存密码。
+- 工具自己签发的证书条目，其 p12 密码是**自动生成的随机值**，保存在 `~/.ipasign/identities/<条目>/meta.json`（本机明文，只有本用户可读）。这样签名时无需再输入。
+- 你**导入**的 p12 不会被记录密码，使用时仍需提供。
 
 ## 开发
 

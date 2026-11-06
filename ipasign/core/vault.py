@@ -65,6 +65,7 @@ def save(
     profile_path: Optional["str | Path"] = None,
     password: Optional[str] = None,
     overwrite: bool = False,
+    store_password: bool = False,
 ) -> StoredIdentity:
     """Copy an identity into the vault and record its metadata."""
     from ipasign.core.pki import load_identity
@@ -85,6 +86,10 @@ def save(
 
     meta = {
         "name": safe,
+        # Only identities created by the certificate factory keep their
+        # (randomly generated) container password here; imported p12 files do
+        # not, because that password belongs to the user.
+        **({"p12_password": password} if store_password and password else {}),
         "team_id": identity.team_id,
         "common_name": identity.common_name,
         "serial": hex(identity.leaf.serial_number),
@@ -159,3 +164,8 @@ def remove(name: str) -> None:
     if not directory.is_dir():
         raise IpasignError(f"证书库里没有 {safe!r}")
     shutil.rmtree(directory)
+
+
+def password_of(entry: StoredIdentity) -> Optional[str]:
+    """Container password recorded for factory-issued identities."""
+    return entry.meta.get("p12_password")

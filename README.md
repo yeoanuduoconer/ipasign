@@ -38,35 +38,42 @@
 
 ## 安装
 
-### 零依赖：单文件可执行（推荐）
+### 下载即用（零依赖）
 
-不想装 Python 的话，直接用打包好的单个可执行文件：
+仓库根目录已经附带打包好的可执行文件：
 
 ```
 ipasign.exe        （Windows x64，约 80 MB）
 ```
 
-它内置了 Python 运行时、所有依赖库、原生登录库 —— **目标机器不需要安装任何东西**：
-不用 Python、不用 pip、不用编译器。
+它内部包含了 **Python 运行时、全部依赖库、原生登录库**，所以：
+
+- 空系统上不需要装 Python
+- 不需要 pip / virtualenv
+- 不需要编译器、不需要 vcpkg、不需要任何 `tools` 目录
+
+下载仓库（或解压 zip）后，在项目目录里：
 
 ```powershell
 .\ipasign.exe            # 交互式界面
-.\ipasign.exe selfcheck  # 检查依赖、路径、设备
+.\ipasign.exe selfcheck  # 检查依赖、路径、设备、证书库
 ```
 
-**唯一的系统要求**：如果你想「装到 iPhone/iPad」，Windows 需要安装 Apple 的
-USB 驱动（iTunes 或「Apple Devices」应用提供，装一次即可）。这是系统级驱动，
-任何工具都绕不开；**签名、登录、申请证书完全不需要它**。macOS 自带该驱动。
+双击也可以直接打开。
 
-首次运行可能出现 Windows「未知发布者」提示（可执行文件没有代码签名），
-选择「仍要运行」即可；介意的话可以按下面的方式从源码运行。
+**唯一的系统级前提**：如果要「插线装到 iPhone/iPad」，Windows 需要 Apple 的
+USB 驱动（iTunes 或「Apple Devices」应用，装一次即可）。这是设备驱动，
+任何装机工具都绕不开；**签名、登录、申请证书、自动续签完全不需要它**。
+macOS 自带该驱动。
 
-自己打包：
+首次运行可能提示「未知发布者」（exe 未做代码签名），选择「仍要运行」即可。
+
+维护者重新打包：
 
 ```bash
 pip install pyinstaller
-pyinstaller --noconfirm --clean packaging/ipasign.spec
-# 产物在 dist/ipasign.exe
+python -m PyInstaller --noconfirm --clean packaging/ipasign.spec
+# 产物：dist/ipasign.exe，复制到仓库根目录即可发布
 ```
 
 ### 从源码安装

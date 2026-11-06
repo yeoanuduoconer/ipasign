@@ -8,6 +8,7 @@ import types
 import pytest
 
 from ipasign import watch
+from ipasign.core.errors import IpasignError
 from ipasign.core import vault
 
 
@@ -58,7 +59,7 @@ def test_add_list_remove(tmp_path, monkeypatch):
 
 
 def test_add_rejects_missing_ipa(tmp_path):
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(IpasignError):
         watch.add_job(tmp_path / "nope.ipa", "entry")
 
 

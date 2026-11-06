@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from ipasign.core import vault
+from ipasign.core.errors import IpasignError
 from ipasign.core.bundle import sign_ipa
 from ipasign.core.pki import load_identity
 from ipasign.core.profile import ProvisioningProfile
@@ -123,7 +124,7 @@ def add_job(
 ) -> Job:
     source = Path(ipa)
     if not source.is_file():
-        raise FileNotFoundError(f"找不到 IPA: {source}")
+        raise IpasignError(f"找不到 IPA: {source}")
     vault.load(vault_name)  # fail early when the entry does not exist
     job = Job(
         id=job_id or uuid.uuid4().hex[:8],

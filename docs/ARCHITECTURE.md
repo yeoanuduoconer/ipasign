@@ -207,3 +207,43 @@ tests/test_pki.py     证书链
 tests/test_profile.py 描述文件
 tests/test_vault.py   证书库
 ```
+
+
+## 七、自动续签
+
+ipasign/watch.py 是一个很薄的调度层：
+
+`
+renewals.json            # 任务：ipa / 证书库条目 / 设备 / 间隔
+   ↓ run_once(threshold)
+profile 到期时间 ≤ 阈值？
+   ↓ 是
+issue(reuse=条目)        # 重新拉描述文件（复用同一张证书）
+   ↓
+sign_ipa(原 IPA → 新 IPA)
+   ↓
+install_ipa(udid, wifi)
+   ↓
+记录 last_run / last_result / last_error
+`
+
+关键点：
+
+- **只刷描述文件，不重发证书**——证书一年有效，描述文件 7 天到期，重发证书会消耗免费账号唯一的名额。
+- 到期时间从证书库的 meta.profile_expires 读取，没有元数据时退回解析描述文件本身。
+- 密码默认不落盘；--save-password 才会写进任务文件（明文，仅限本机可信环境）。
+- watch start 是前台循环，需要常驻时用系统计划任务（Windows 任务计划程序 / systemd timer / cron）调 watch run。
+
+## 八、Wi-Fi 安装
+
+安装走的是经典 lockdown + installation_proxy，不需要 iOS 17+ 的 RSD 隧道；
+usbmuxd 负责按 UDID 把连接路由到 USB 或网络设备。
+
+因此 Wi-Fi 的前提是设备**已经配对过 Wi-Fi 同步**：
+
+1. 数据线连一次，在 iTunes（Windows）/ Finder（macOS）勾选「通过 Wi-Fi 同步」
+2. 手机与电脑同一局域网，手机解锁
+3. pymobiledevice3 usbmux list --network 能看到设备
+
+list_devices(wifi=...) 用 DeviceInfo.transport（usb / wifi）过滤，
+install_ipa(..., wifi=True) 找不到网络设备时会给出上面的指引。

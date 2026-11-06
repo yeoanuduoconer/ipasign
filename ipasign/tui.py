@@ -121,24 +121,42 @@ def _detect_devices(wifi: bool | None = None) -> List:
         return []
 
 
-def _pick_device(devices: List) -> Optional[str]:
+def _pick_device(devices: List):
+    """Return the chosen DeviceInfo; a single device is used automatically."""
     if not devices:
-        console.print("[yellow]没检测到已连接的设备（USB 连接并信任本机后重试）[/yellow]")
+        console.print(
+            "[yellow]没有检测到设备。[/yellow]\n"
+            "[dim]USB：用数据线连接并在手机上点「信任」；\n"
+            "Wi-Fi：先在 iTunes/Finder 勾选「通过 Wi-Fi 同步」。[/dim]"
+        )
         return None
+    if len(devices) == 1:
+        device = devices[0]
+        console.print(
+            f"目标设备: [bold]{device.label()}[/bold] "
+            f"({device.transport.upper()})"
+        )
+        return device
     table = Table(title="已连接设备")
     table.add_column("#", width=3, style="cyan")
     table.add_column("名称")
     table.add_column("型号")
     table.add_column("系统")
+    table.add_column("连接")
     table.add_column("UDID")
     for index, device in enumerate(devices, 1):
         table.add_row(
-            str(index), device.name, device.product_type, device.ios_version, device.udid
+            str(index),
+            device.name,
+            device.product_type,
+            device.ios_version,
+            device.transport.upper(),
+            device.udid,
         )
     console.print(table)
     choice = Prompt.ask("编号", default="1")
     try:
-        return devices[int(choice) - 1].udid
+        return devices[int(choice) - 1]
     except (ValueError, IndexError):
         return None
 
@@ -277,7 +295,10 @@ def screen_issue() -> None:
     if not app_name:
         app_name = Prompt.ask("App 名称（后台显示用）", default=bundle_id.rsplit(".", 1)[-1])
     devices = _detect_devices()
-    udid = _pick_device(devices) if devices and Confirm.ask("注册已连接的设备？", default=True) else None
+    udid = None
+    if devices and Confirm.ask("注册已连接的设备？", default=True):
+        target = _pick_device(devices)
+        udid = target.udid if target else None
 
     reuse = None
     entries = vault.list_all()
@@ -370,27 +391,15 @@ def screen_install(default_ipa: Optional[Path] = None) -> None:
         console.print(f"安装: [bold]{source}[/bold]")
     if not source:
         return
-    # USB is the default: Wi-Fi needs a device that was already paired for
-    # wireless sync, and silently failing there is confusing.
-    wifi = Confirm.ask("通过 Wi-Fi 安装（需事先配对 Wi-Fi 同步）？", default=False)
-    devices = _detect_devices(wifi=True) if wifi else _detect_devices()
-    if wifi and not devices:
-        console.print(
-            "[yellow]没有发现可无线连接的设备。[/yellow]\n"
-            "[dim]需要在 iTunes（Windows）/ Finder（macOS）里勾选「通过 Wi-Fi 同步」，"
-            "并让手机和电脑连同一个网络。[/dim]"
-        )
-        if Confirm.ask("改用 USB 安装？", default=True):
-            wifi = False
-            devices = _detect_devices()
-        else:
-            return
-    udid = _pick_device(devices)
-    if not udid:
+    # USB is preferred automatically; Wi-Fi is only used when that is the
+    # device we can reach.  No transport question for the common case.
+    device = _pick_device(_detect_devices())
+    if device is None:
         return
+    wifi = device.is_wifi
     try:
         with console.status("[cyan]上传并安装中（大文件需要几分钟）…[/cyan]"):
-            install_ipa(source, udid=udid, wifi=wifi, log=_logger())
+            install_ipa(source, udid=device.udid, wifi=wifi, log=_logger())
     except Exception as exc:  # noqa: BLE001
         console.print(f"[red]安装失败:[/red] {exc}")
         return
@@ -474,8 +483,9 @@ def screen_watch() -> None:
         entry = _choose_vault_entry("用哪套证书续签")
         if not entry:
             return
-        udid = _pick_device(_detect_devices())
-        wifi = Confirm.ask("续签后用 Wi-Fi 安装？", default=False)
+        target = _pick_device(_detect_devices())
+        udid = target.udid if target else None
+        wifi = bool(target and target.is_wifi)
         save_password = Confirm.ask("保存 p12 密码？（明文存进任务文件）", default=False)
         password = Prompt.ask("p12 密码", default="ipasign", password=True) if save_password else None
         job = watch.add_job(

@@ -95,6 +95,52 @@ def align(value: int, alignment: int) -> int:
     return (value + alignment - 1) & ~(alignment - 1)
 
 
+def dylib_identifier(data: bytes) -> Optional[str]:
+    """Return a dylib's ``LC_ID_DYLIB`` install name, if it has one.
+
+    codesign uses the *basename* of the install name as the CodeDirectory
+    identifier (``@rpath/libdolphin.dylib`` -> ``libdolphin``); a path with
+    slashes is rejected by iOS on install (0xe8008019).
+    """
+    image = split_slices(data)
+    if not image.slices:
+        return None
+    chunk = image.slices[0].data
+    if len(chunk) < 32:
+        return None
+    magic = struct.unpack_from("<I", chunk, 0)[0]
+    if magic == MH_MAGIC_64:
+        endian, header = "<", 32
+    elif magic == MH_CIGAM_64:
+        endian, header = ">", 32
+    elif magic == MH_MAGIC:
+        endian, header = "<", 28
+    elif magic == MH_CIGAM:
+        endian, header = ">", 28
+    else:
+        return None
+    try:
+        ncmds = struct.unpack_from(endian + "I", chunk, 16)[0]
+    except struct.error:
+        return None
+    cursor = header
+    for _ in range(ncmds):
+        if cursor + 8 > len(chunk):
+            return None
+        cmd, cmdsize = struct.unpack_from(endian + "II", chunk, cursor)
+        if cmdsize < 8:
+            return None
+        if cmd == 0xD:  # LC_ID_DYLIB
+            name_off = struct.unpack_from(endian + "I", chunk, cursor + 8)[0]
+            start = cursor + name_off
+            end = chunk.find(b"\x00", start)
+            if end < 0:
+                return None
+            return chunk[start:end].decode("utf-8", "replace")
+        cursor += cmdsize
+    return None
+
+
 def is_macho(data: bytes) -> bool:
     if len(data) < 4:
         return False
@@ -741,12 +787,17 @@ def _sign_slice(data: bytes, params: SignParameters) -> bytes:
     link_filesize = max(0, dataoff - link_off)
     link_vmsize_new = max(link_vmsize, align(link_filesize, 0x1000))
 
+    original_datasize = code_sig.datasize if code_sig is not None else 0
     signature = b""
     for _ in range(4):
         head = assemble(datasize, link_filesize, link_vmsize_new)
         signature = _pad_signature(
             _build_signature(head, dataoff, params, exec_seg)
         )
+        # Keep the original signature area when it is larger (codesign/zsign
+        # never shrink it); some iOS builds reject a shrunken __LINKEDIT.
+        if len(signature) < original_datasize:
+            signature += b"\x00" * (original_datasize - len(signature))
         if len(signature) == datasize:
             return head + signature
         datasize = len(signature)

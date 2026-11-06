@@ -183,6 +183,22 @@ def cmd_sign(args: argparse.Namespace) -> int:
 
     profile = None
     identity = None
+    if args.engine == "zsign" and not args.adhoc:
+        from .core.zsign_backend import bundle_id_for_profile, sign_with_zsign
+
+        zsign_profile = ProvisioningProfile.load(args.profile)
+        sign_with_zsign(
+            input_ipa,
+            output_ipa,
+            p12=args.p12,
+            profile=args.profile,
+            password=args.password,
+            bundle_id=args.bundle_id or bundle_id_for_profile(zsign_profile),
+            log=log,
+        )
+        print(f"[完成] {output_ipa}（zsign 引擎）")
+        return 0
+
     if not args.adhoc:
         if not args.p12:
             raise IpasignError("需要 -c/--p12 指定签名证书")
@@ -462,6 +478,26 @@ def cmd_renew(args: argparse.Namespace) -> int:
     output = Path(args.output) if args.output else Path(args.ipa).with_name(
         f"{Path(args.ipa).stem}-renewed.ipa"
     )
+    if getattr(args, "engine", "native") == "zsign":
+        from .core.zsign_backend import sign_with_zsign
+
+        from .core.zsign_backend import bundle_id_for_profile
+
+        sign_with_zsign(
+            args.ipa,
+            output,
+            p12=item.p12_path,
+            profile=item.profile_path,
+            password=args.password,
+            bundle_id=args.bundle_id or bundle_id_for_profile(profile),
+            log=log,
+        )
+        print(f"[完成] {output}（zsign 引擎，到期 {profile.expiration:%Y-%m-%d}）")
+        if args.install:
+            log("安装到设备 ...")
+            udid = device.install_ipa(output, udid=args.udid, log=log)
+            print(f"[完成] 已安装到 {udid}")
+        return 0
     report = bundle.sign_ipa(
         args.ipa, output, identity=identity, profile=profile,
         options=SignOptions(bundle_id=args.bundle_id), log=log,
@@ -728,6 +764,10 @@ def build_parser() -> argparse.ArgumentParser:
     sign.add_argument("--no-download", action="store_true", help="不要自动下载 Apple 中间证书")
     sign.add_argument("--no-rewrite-bundle-id", action="store_true", help="禁止自动改写 Bundle ID")
     sign.add_argument("--adhoc", "--ad-hoc", action="store_true", help="仅做 ad-hoc 签名（越狱设备）")
+    sign.add_argument(
+        "--engine", choices=["native", "zsign"], default="native",
+        help="签名引擎（zsign 需要外部可执行文件 IPASIGN_ZSIGN）",
+    )
     sign.add_argument("--keep-workdir", help="保留解包目录（调试用）")
     sign.add_argument("--force", action="store_true", help="覆盖已存在的输出文件")
     sign.add_argument("--json", action="store_true", help="以 JSON 输出结果")
@@ -793,6 +833,10 @@ def build_parser() -> argparse.ArgumentParser:
     renew_parser.add_argument("--install", action="store_true")
     renew_parser.add_argument("--udid")
     renew_parser.add_argument("-v", "--verbose", action="store_true")
+    renew_parser.add_argument(
+        "--engine", choices=["native", "zsign"], default="native",
+        help="签名引擎（zsign 需要外部可执行文件）",
+    )
     renew_parser.set_defaults(func=cmd_renew)
 
     devices = subparsers.add_parser("devices", help="列出已连接的 iPhone / iPad")

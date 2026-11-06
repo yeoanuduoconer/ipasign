@@ -129,13 +129,15 @@ def render_code_resources(entries: Sequence[ResourceEntry]) -> bytes:
             files[entry.path] = {"symlink": entry.symlink}
             files2[entry.path] = {"symlink": entry.symlink}
             continue
+        # codesign (and zsign) keep the SHA-1 hash next to SHA-256 in files2;
+        # iOS 26 rejects an envelope whose entries only carry ``hash2``.
         record: Dict[str, object] = {}
         if entry.sha1 is not None:
             record["hash"] = entry.sha1
         if entry.sha256 is not None:
             record["hash2"] = entry.sha256
         files[entry.path] = {"hash": entry.sha1} if entry.sha1 else record
-        files2[entry.path] = {"hash2": entry.sha256} if entry.sha256 else record
+        files2[entry.path] = dict(record)
 
     payload = {
         "files": files,

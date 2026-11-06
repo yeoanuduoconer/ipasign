@@ -450,9 +450,16 @@ def sign_app(
         executable = resolve_executable(app_path, info)
         for binary in _loose_binaries(app_path, _nested_bundles(app_path), executable):
             rel = binary.relative_to(app_path).as_posix()
+            # codesign uses the basename of LC_ID_DYLIB; a path with slashes is
+            # rejected by iOS (0xe8008019).
+            try:
+                install_name = macho.dylib_identifier(binary.read_bytes()) or rel
+            except OSError:
+                install_name = rel
+            identifier = install_name.rsplit("/", 1)[-1]
             architectures = _sign_binary(
                 binary,
-                identifier=rel,
+                identifier=identifier,
                 identity=identity,
                 entitlements={},
                 info_plist=None,
@@ -460,7 +467,7 @@ def sign_app(
                 options=options,
             )
             report.steps.append(
-                SignStep(path=str(binary), identifier=rel, kind="dylib",
+                SignStep(path=str(binary), identifier=identifier, kind="dylib",
                          architectures=architectures)
             )
 

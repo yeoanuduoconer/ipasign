@@ -40,10 +40,9 @@ class DeveloperError(RuntimeError):
 
 
 def _verify():
-    from pathlib import Path
-
+    """requests ``verify`` value: the optional CA bundle, else system roots."""
     bundle = paths.ca_bundle()
-    return str(bundle) if bundle.is_file() else True
+    return str(bundle) if bundle is not None else True
 
 
 class DeveloperClient:

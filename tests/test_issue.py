@@ -171,3 +171,11 @@ def test_reuse_skips_csr(monkeypatch, tmp_path):
 
     assert client.submitted == []  # no new certificate requested
     assert result["certificate_id"] is None
+
+
+def test_verify_falls_back_when_ca_bundle_missing(monkeypatch, tmp_path):
+    """No ca-bundle.pem must not crash requests verification."""
+    monkeypatch.setenv("IPASIGN_HOME", str(tmp_path))
+    from ipasign.apple import developer
+
+    assert developer._verify() is True

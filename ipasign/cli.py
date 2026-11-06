@@ -641,7 +641,7 @@ def _fetch_developer_teams(headers: Dict[str, str]) -> List[Dict]:
         "https://developerservices2.apple.com/services/QH65B2/listTeams.action?clientId=XABBG36SBA",
         data=plistlib.dumps(body),
         headers={**headers, "Content-Type": "text/x-xml-plist"},
-        verify=str(bundle) if bundle.is_file() else True,
+        verify=str(bundle) if bundle is not None else True,
         timeout=40,
     )
     if response.status_code != 200:

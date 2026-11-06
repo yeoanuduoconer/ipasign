@@ -548,7 +548,17 @@ def cmd_login(args: argparse.Namespace) -> int:
     try:
         device, session = apple_auth_bridge.login(args.account, args.password)
     except Exception as exc:  # noqa: BLE001 - native errors
-        print(f"[错误] 登录失败: {exc}", file=sys.stderr)
+        message = str(exc)
+        if "503" in message:
+            print(
+                "[错误] Apple 限流（HTTP 503）：这个 IP 短时间内请求太多。\n"
+                "       等 30-60 分钟再试，或换网络（手机热点 / 代理节点）立刻解除。",
+                file=sys.stderr,
+            )
+        elif "-22406" in message or "-20101" in message or "-20102" in message:
+            print("[错误] 账号或密码不正确。", file=sys.stderr)
+        else:
+            print(f"[错误] 登录失败: {message}", file=sys.stderr)
         return 1
 
     print("[完成] 登录成功")

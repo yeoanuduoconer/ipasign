@@ -7,6 +7,7 @@ import zipfile
 from pathlib import Path
 
 from ipasign.core import macho
+import ipasign.core.bundle as bundle_mod
 from ipasign.core.bundle import SignOptions, sign_app, sign_ipa
 from ipasign.core.cms import verify_detached_cms
 from ipasign.core.ipa import extract_ipa
@@ -150,3 +151,31 @@ def test_encrypted_app_is_rejected(tmp_path):
     with _pytest.raises(Exception) as excinfo:
         sign_app(app, identity, profile)
     assert "加密" in str(excinfo.value)
+
+
+def test_workdir_is_created_next_to_output(tmp_path, monkeypatch):
+    """Large IPAs must not explode into the system temp drive."""
+    identity, cert = _identity()
+    profile = ProvisioningProfile.parse(
+        fixtures.make_profile(certificates=[cert], app_id="TEAM123456.*")
+    )
+    app = fixtures.make_app_dir(str(tmp_path / "src"))
+    ipa = fixtures.make_ipa(app, str(tmp_path / "in.ipa"))
+    target_dir = tmp_path / "exports"
+    target_dir.mkdir()
+    out = target_dir / "signed.ipa"
+
+    captured = {}
+    real_extract = bundle_mod.extract_ipa
+
+    def spy(path, workdir):
+        captured["workdir"] = Path(workdir)
+        return real_extract(path, workdir)
+
+    monkeypatch.setattr(bundle_mod, "extract_ipa", spy)
+    sign_ipa(ipa, out, identity=identity, profile=profile, options=SignOptions())
+
+    assert out.is_file()
+    assert captured["workdir"].parent == target_dir
+    assert not captured["workdir"].exists(), "workdir should be cleaned up"
+

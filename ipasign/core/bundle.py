@@ -507,9 +507,18 @@ def sign_ipa(
     if input_ipa.resolve() == output_ipa.resolve():
         raise BundleError("input and output IPA must be different files")
 
-    workdir = Path(keep_workdir) if keep_workdir else Path(
-        tempfile.mkdtemp(prefix="ipasign-")
-    )
+    if keep_workdir:
+        workdir = Path(keep_workdir)
+    else:
+        # Unpack next to the output file: a large IPA explodes to several GB
+        # and the user's system drive is often the smallest one.  Fall back to
+        # the system temp directory when that location is not writable.
+        try:
+            workdir = Path(
+                tempfile.mkdtemp(prefix=".ipasign-work-", dir=str(Path(output_ipa).parent))
+            )
+        except OSError:
+            workdir = Path(tempfile.mkdtemp(prefix="ipasign-"))
     try:
         log(f"unpacking {input_ipa.name} ...")
         contents = extract_ipa(input_ipa, workdir)

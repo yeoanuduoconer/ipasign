@@ -370,8 +370,21 @@ def screen_install(default_ipa: Optional[Path] = None) -> None:
         console.print(f"安装: [bold]{source}[/bold]")
     if not source:
         return
-    wifi = Confirm.ask("通过 Wi-Fi 安装（需已配对 Wi-Fi 同步）？", default=False)
-    devices = _detect_devices(wifi=True if wifi else None)
+    # USB is the default: Wi-Fi needs a device that was already paired for
+    # wireless sync, and silently failing there is confusing.
+    wifi = Confirm.ask("通过 Wi-Fi 安装（需事先配对 Wi-Fi 同步）？", default=False)
+    devices = _detect_devices(wifi=True) if wifi else _detect_devices()
+    if wifi and not devices:
+        console.print(
+            "[yellow]没有发现可无线连接的设备。[/yellow]\n"
+            "[dim]需要在 iTunes（Windows）/ Finder（macOS）里勾选「通过 Wi-Fi 同步」，"
+            "并让手机和电脑连同一个网络。[/dim]"
+        )
+        if Confirm.ask("改用 USB 安装？", default=True):
+            wifi = False
+            devices = _detect_devices()
+        else:
+            return
     udid = _pick_device(devices)
     if not udid:
         return

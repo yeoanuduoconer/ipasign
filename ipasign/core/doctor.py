@@ -154,5 +154,33 @@ def run_checks(
     return checks
 
 
+def ipa_bundle_info(ipa_path: "str | Path") -> dict:
+    """Return ``{bundle_id, name, version}`` read from the IPA's Info.plist."""
+    path = Path(ipa_path)
+    if not path.is_file():
+        raise IpasignError(f"找不到 IPA: {path}")
+    try:
+        with zipfile.ZipFile(path) as archive:
+            for name in archive.namelist():
+                if (
+                    name.startswith("Payload/")
+                    and name.count("/") == 2
+                    and name.endswith("/Info.plist")
+                ):
+                    info = plistlib.loads(archive.read(name))
+                    return {
+                        "bundle_id": str(info.get("CFBundleIdentifier") or ""),
+                        "name": str(
+                            info.get("CFBundleDisplayName")
+                            or info.get("CFBundleName")
+                            or ""
+                        ),
+                        "version": str(info.get("CFBundleShortVersionString") or ""),
+                    }
+    except zipfile.BadZipFile as exc:
+        raise IpasignError(f"不是合法的 IPA: {exc}") from exc
+    raise IpasignError("IPA 里找不到 Payload/*.app/Info.plist")
+
+
 def all_ok(checks: List[Check]) -> bool:
     return all(check.ok for check in checks)

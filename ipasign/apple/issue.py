@@ -2,7 +2,15 @@
 
 This is the "certificate factory": everything is produced locally except the
 two Apple signatures (the certificate and the profile), which the developer
-portal hands back through :class:`ipasign.developer.DeveloperClient`.
+portal hands back through :class:`ipasign.apple.developer.DeveloperClient`.
+
+Free Apple IDs are limited to **one** development certificate and a small
+number of new App IDs per week, so this module deliberately reuses whatever it
+can:
+
+* an existing App ID with the same identifier (instead of creating a duplicate)
+* an existing certificate from the local vault (``--reuse``, or automatically
+  when Apple answers ``7460 Maximum number of certificates generated``)
 """
 
 from __future__ import annotations
@@ -10,7 +18,7 @@ from __future__ import annotations
 import base64
 import tempfile
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -22,9 +30,27 @@ from cryptography.hazmat.primitives.serialization import (
 from cryptography.x509.oid import NameOID
 
 from ipasign.apple import auth as apple_auth_bridge
+from ipasign.apple.developer import DeveloperClient, DeveloperError
 from ipasign.core import vault
-from ipasign.apple.developer import DeveloperClient
 from ipasign.core.pki import SigningIdentity, ensure_chain, load_identity
+
+CERT_LIMIT_CODE = 7460  # "Maximum number of certificates generated"
+
+
+def _generate_csr(key: rsa.RSAPrivateKey) -> bytes:
+    subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, "iPhone Developer"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "ipasign"),
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
+        ]
+    )
+    return (
+        x509.CertificateSigningRequestBuilder()
+        .subject_name(subject)
+        .sign(key, hashes.SHA256())
+        .public_bytes(serialization.Encoding.DER)
+    )
 
 
 def _find_cert_content(payload):
@@ -46,20 +72,103 @@ def _find_cert_content(payload):
     return None
 
 
-def _generate_csr(key: rsa.RSAPrivateKey) -> bytes:
-    subject = x509.Name(
-        [
-            x509.NameAttribute(NameOID.COMMON_NAME, "iPhone Developer"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "ipasign"),
-            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
-        ]
+def _vault_identity_for_team(team_id: str, password: str):
+    """Latest vault entry that belongs to *team_id* (used when the slot is full)."""
+    best = None
+    for entry in vault.list_all():
+        if entry.meta.get("team_id") != team_id or not entry.p12_path.is_file():
+            continue
+        stamp = entry.meta.get("leaf_expires") or ""
+        if best is None or stamp > best[0]:
+            best = (stamp, entry)
+    if best is None:
+        return None, None
+    entry = best[1]
+    return entry, load_identity(entry.p12_path, password)
+
+
+def _obtain_identity(
+    client: DeveloperClient,
+    team_id: str,
+    *,
+    reuse: Optional[str],
+    password: str,
+    log,
+) -> Tuple[SigningIdentity, Optional[dict], bool]:
+    """Return ``(identity, cert_info, reused)``.
+
+    ``reuse`` may name a vault entry; otherwise a new certificate is requested
+    and, if the account has no free slot, the newest vault identity is used.
+    """
+    if reuse:
+        stored = vault.load(reuse)
+        identity = load_identity(stored.p12_path, password)
+        log(f"[..] 复用证书: {identity.leaf.subject.rfc4514_string()}")
+        return identity, None, True
+
+    before = {c["certificateId"] for c in client.list_certificates(team_id)}
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    # Persist immediately: a crash after Apple signs the CSR would otherwise
+    # leave an unusable certificate (private key lost) and burn the only slot.
+    key_stash = Path.home() / ".ipasign" / "pending-key.pem"
+    key_stash.parent.mkdir(parents=True, exist_ok=True)
+    key_stash.write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
     )
-    return (
-        x509.CertificateSigningRequestBuilder()
-        .subject_name(subject)
-        .sign(key, hashes.SHA256())
-        .public_bytes(serialization.Encoding.DER)
+
+    try:
+        log("[..] 提交 CSR，申请开发证书")
+        client.submit_csr(team_id, _generate_csr(key))
+    except DeveloperError as error:
+        if error.payload.get("resultCode") != CERT_LIMIT_CODE:
+            raise
+        entry, identity = _vault_identity_for_team(team_id, password)
+        key_stash.unlink(missing_ok=True)
+        if identity is None:
+            raise RuntimeError(
+                "证书名额已满（免费 Apple ID 只能有 1 张开发证书）。"
+                "请先在开发者后台吊销旧证书，或用 --reuse 指定证书库条目。"
+            ) from error
+        log(f"[..] 证书名额已满，改用证书库中的证书: {entry.name}")
+        return identity, None, True
+
+    fresh = [
+        c for c in client.list_certificates(team_id)
+        if c.get("certificateId") not in before
+    ]
+    if not fresh:
+        raise RuntimeError("Apple 没有返回新证书")
+    cert_info = fresh[0]
+    content = cert_info.get("certContent") or _find_cert_content(cert_info)
+    if not content:
+        raise RuntimeError("证书列表里没有 certContent")
+    leaf = x509.load_der_x509_certificate(
+        content if isinstance(content, (bytes, bytearray)) else base64.b64decode(content)
     )
+    key_stash.unlink(missing_ok=True)
+    log(f"[..] 证书签发成功: {leaf.subject.rfc4514_string()}")
+    identity = ensure_chain(
+        SigningIdentity(key=key, certificates=[leaf]), allow_download=True, log=log
+    )
+    return identity, cert_info, False
+
+
+def _ensure_app_id(
+    client: DeveloperClient, team_id: str, bundle_id: str, app_name: str, log
+) -> dict:
+    """Reuse the App ID when it already exists (free accounts have a quota)."""
+    for existing in client.list_app_ids(team_id):
+        if existing.get("identifier") == bundle_id:
+            log(f"[..] 复用 App ID: {existing.get('appIdId')}")
+            return existing
+    log(f"[..] 注册 App ID {bundle_id}")
+    app_id = client.add_app_id(team_id, bundle_id, app_name)
+    log(f"[..] App ID: {app_id['appIdId']}")
+    return app_id
 
 
 def issue(
@@ -73,7 +182,7 @@ def issue(
     password: str = "ipasign",
     log=print,
 ) -> Dict:
-    """Create a certificate + profile for ``bundle_id`` and store them."""
+    """Create (or reuse) a certificate + profile for ``bundle_id``."""
     device = apple_auth_bridge.open_device()
     if device.session is None:
         raise RuntimeError("尚未登录，请先运行: ipasign login --account <Apple ID>")
@@ -95,54 +204,11 @@ def issue(
         else:
             log(f"[..] 设备已注册: {device_udid}")
 
-    key_stash = Path.home() / ".ipasign" / "pending-key.pem"
-    if reuse:
-        # Free accounts may hold only one development certificate, so a new
-        # bundle id reuses the existing key/certificate and only fetches a
-        # fresh profile.
-        stored = vault.load(reuse)
-        reused = load_identity(stored.p12_path, password)
-        key, leaf = reused.key, reused.leaf
-        log(f"[..] 复用证书: {leaf.subject.rfc4514_string()}")
-    else:
-        before = {c["certificateId"] for c in client.list_certificates(team_id)}
-        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    if not reuse:
-        # Persist immediately: a crash after Apple signs the CSR would otherwise
-        # leave an unusable certificate (private key lost) and burn the slot.
-        key_stash.parent.mkdir(parents=True, exist_ok=True)
-        key_stash.write_bytes(
-            key.private_bytes(
-                serialization.Encoding.PEM,
-                serialization.PrivateFormat.PKCS8,
-                serialization.NoEncryption(),
-            )
-        )
-        csr = _generate_csr(key)
-        log("[..] 提交 CSR，申请开发证书")
-        client.submit_csr(team_id, csr)
-        fresh = [
-            c for c in client.list_certificates(team_id)
-            if c.get("certificateId") not in before
-        ]
-        if not fresh:
-            raise RuntimeError("Apple 没有返回新证书")
-        cert_info = fresh[0]
-        content = cert_info.get("certContent") or _find_cert_content(cert_info)
-        if not content:
-            raise RuntimeError("证书列表里没有 certContent")
-        leaf = x509.load_der_x509_certificate(
-            content if isinstance(content, (bytes, bytearray)) else base64.b64decode(content)
-        )
-        log(f"[..] 证书签发成功: {leaf.subject.rfc4514_string()}")
-
-    identity = ensure_chain(
-        SigningIdentity(key=key, certificates=[leaf]), allow_download=True, log=log
+    identity, cert_info, _reused = _obtain_identity(
+        client, team_id, reuse=reuse, password=password, log=log
     )
 
-    log(f"[..] 注册 App ID {bundle_id}")
-    app_id = client.add_app_id(team_id, bundle_id, app_name)
-    log(f"[..] App ID: {app_id['appIdId']}")
+    app_id = _ensure_app_id(client, team_id, bundle_id, app_name, log)
 
     log("[..] 下载描述文件")
     profile_bytes = client.download_profile(team_id, app_id["appIdId"])
@@ -150,7 +216,7 @@ def issue(
     name = vault_name or f"{team_id}-{app_id['appIdId']}".lower()
     p12 = pkcs12.serialize_key_and_certificates(
         b"ipasign",
-        key,
+        identity.key,
         identity.certificates[0],
         cas=identity.certificates[1:] or None,
         encryption_algorithm=BestAvailableEncryption(password.encode()),
@@ -169,12 +235,11 @@ def issue(
             overwrite=True,
         )
 
-    key_stash.unlink(missing_ok=True)
     log(f"[完成] 已存入证书库: {name}")
     return {
         "name": name,
         "team_id": team_id,
-        "certificate_id": None if reuse else cert_info.get("certificateId"),
+        "certificate_id": cert_info.get("certificateId") if cert_info else None,
         "app_id_id": app_id["appIdId"],
         "bundle_id": bundle_id,
         "profile_size": len(profile_bytes),

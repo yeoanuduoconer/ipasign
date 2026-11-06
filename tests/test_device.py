@@ -66,10 +66,12 @@ def test_confirm_installed_detects_foreign_signer(tmp_path, monkeypatch):
     ipa = _make_ipa(tmp_path)
     monkeypatch.setattr(
         device,
-        "_installed_app",
-        lambda udid, bundle_id: {
-            "Entitlements": {"com.apple.developer.team-identifier": "OTHERTEAM"},
-            "SignerIdentity": "Apple iPhone OS Application Signing",
+        "_list_apps",
+        lambda udid: {
+            "com.example.demo": {
+                "Entitlements": {"com.apple.developer.team-identifier": "OTHERTEAM"},
+                "SignerIdentity": "Apple iPhone OS Application Signing",
+            }
         },
     )
     with _pytest.raises(device.DeviceError) as excinfo:
@@ -81,7 +83,11 @@ def test_confirm_installed_accepts_matching_signer(tmp_path, monkeypatch):
     ipa = _make_ipa(tmp_path)
     monkeypatch.setattr(
         device,
-        "_installed_app",
-        lambda udid, bundle_id: {"Entitlements": {"com.apple.developer.team-identifier": "TEAM123456"}},
+        "_list_apps",
+        lambda udid: {
+            "com.example.demo": {
+                "Entitlements": {"com.apple.developer.team-identifier": "TEAM123456"}
+            }
+        },
     )
     device._confirm_installed(ipa, "UDID")

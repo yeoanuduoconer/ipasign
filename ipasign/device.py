@@ -274,17 +274,32 @@ def _ipa_metadata(path: Path) -> "tuple[str, str]":
     return bundle_id, team_id
 
 
-def _installed_app(udid: str, bundle_id: str) -> "dict | None":
-    process = subprocess.run(
-        [sys.executable, "-m", "pymobiledevice3", "apps", "list", "--udid", udid],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
+def _list_apps(udid: str) -> "dict | None":
+    """Return the installed-app dictionary, or None when the query failed.
+
+    The query fails while the device is locked or busy installing, which must
+    not be confused with "the app is not installed".
+    """
+    try:
+        process = subprocess.run(
+            [sys.executable, "-m", "pymobiledevice3", "apps", "list", "--udid", udid],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=60,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except subprocess.TimeoutExpired:
+        return None
     if process.returncode != 0:
         return None
     try:
-        payload = json.loads(process.stdout[process.stdout.find("{"):])
+        return json.loads(process.stdout[process.stdout.find("{"):])
     except (ValueError, json.JSONDecodeError):
+        return None
+
+
+def _installed_app(udid: str, bundle_id: str) -> "dict | None":
+    payload = _list_apps(udid)
+    if payload is None:
         return None
     return payload.get(bundle_id)
 
@@ -302,12 +317,23 @@ def _confirm_installed(path: Path, udid: str, log=lambda message: None) -> None:
     if not bundle_id:
         return
     app = None
-    for _ in range(5):
-        app = _installed_app(udid, bundle_id)
-        if app is not None:
-            break
+    listed = False
+    for attempt in range(10):
+        payload = _list_apps(udid)
+        if payload is not None:
+            listed = True
+            app = payload.get(bundle_id)
+            if app is not None:
+                break
+        if attempt == 0:
+            log("等待设备刷新应用列表 ...")
         time.sleep(2)
     if app is None:
+        if not listed:
+            raise DeviceError(
+                "安装已提交，但读取设备应用列表失败（通常是因为手机锁屏或正忙）。\n"
+                "解锁手机后运行 `ipasign devices` 确认，或重新执行一次安装。"
+            )
         raise DeviceError(
             f"系统报告安装完成，但设备上查不到 {bundle_id}。\n"
             "常见原因：签名校验未通过（证书与描述文件不匹配 / 证书被吊销）、"

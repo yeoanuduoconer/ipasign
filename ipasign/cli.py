@@ -616,6 +616,30 @@ def _fetch_developer_teams(headers: Dict[str, str]) -> List[Dict]:
     return payload.get("teams", []) or []
 
 
+def cmd_issue(args: argparse.Namespace) -> int:
+    """Issue a certificate + provisioning profile through the developer portal."""
+    from .issue import issue
+
+    try:
+        result = issue(
+            bundle_id=args.bundle_id,
+            app_name=args.app_name,
+            device_udid=args.udid,
+            vault_name=args.name,
+            reuse=args.reuse,
+            password=args.password,
+        )
+    except Exception as exc:  # noqa: BLE001 - remote + native errors
+        print(f"[错误] 签发失败: {exc}", file=sys.stderr)
+        return 1
+    print(f"  Team       : {result['team_id']}")
+    print(f"  证书 ID    : {result['certificate_id']}")
+    print(f"  App ID     : {result['app_id_id']} ({result['bundle_id']})")
+    print(f"  描述文件   : {result['profile_app_id']}")
+    print(f"  证书库条目 : {result['name']}")
+    return 0
+
+
 def cmd_fetch_certs(args: argparse.Namespace) -> int:
     from .pki import cert_cache_dir, download_apple_certificates
 
@@ -752,6 +776,15 @@ def build_parser() -> argparse.ArgumentParser:
     fetch = subparsers.add_parser("fetch-certs", help="下载并缓存 Apple WWDR 中间证书")
     fetch.add_argument("--force", action="store_true")
     fetch.set_defaults(func=cmd_fetch_certs)
+
+    issue = subparsers.add_parser("issue", help="自动申请证书 + 描述文件并存入证书库")
+    issue.add_argument("--bundle-id", required=True, help="App 的 Bundle ID")
+    issue.add_argument("--app-name", default="ipasign app", help="在开发者后台显示的名字")
+    issue.add_argument("--udid", help="顺便注册到该 UDID 的设备")
+    issue.add_argument("--name", help="证书库条目名（默认自动生成）")
+    issue.add_argument("--reuse", help="复用证书库里的证书，只申请新描述文件（免费账号推荐）")
+    issue.add_argument("--password", default="ipasign", help="生成的 p12 密码")
+    issue.set_defaults(func=cmd_issue)
 
     login = subparsers.add_parser("login", help="用 Apple ID 登录，申请证书与描述文件")
     login.add_argument("--account", required=True, help="Apple ID 邮箱")

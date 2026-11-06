@@ -59,7 +59,7 @@ def sign_with_zsign(
     if binary is None:
         raise IpasignError(
             "没有找到 zsign。下载 zsign 后设置 IPASIGN_ZSIGN 指向它，"
-            "例如：\n  set IPASIGN_ZSIGN=D:\\tools\\zsign.exe"
+            "例如：\n  set IPASIGN_ZSIGN=C:\\path\\to\\zsign.exe"
         )
     command = [
         str(binary),

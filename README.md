@@ -160,16 +160,16 @@ ipasign/
 
 **设备证明**（`apple/anisette/`）：向 Apple 申请 SPIM → 用本机硬件指纹生成 CPIM → 换取 PTM/信任密钥 → 落地 `adi.pb`。之后每次请求用它生成 `X-Apple-I-MD` 一次性口令。
 
-## 已知限制
+## 引擎选择
 
-自研签名引擎在多数 App 上与 zsign 逐字段一致，但**部分复杂包（多架构 framework + 独立 dylib）目前仍会被 iOS 以 `0xe8008019` 拒绝**，尽管签名本身通过 OpenSSL 校验。这类包可以切换到后备引擎：
+默认使用自研的 `native` 引擎（纯 Python，逐字段与 zsign 对齐，已在 iOS 26 真机验证）。需要时也可以调用外部 zsign：
 
 ```bash
 ipasign sign app.ipa -o out.ipa -c id.p12 -m profile.mobileprovision --engine zsign
 ipasign renew <条目> app.ipa -o out.ipa -p <密码> --engine zsign --install
 ```
 
-zsign 是独立的 GPLv3 程序，**本项目不打包它**：自行下载后设置 `IPASIGN_ZSIGN` 指向可执行文件即可。默认引擎仍是自研的 `native`。
+zsign 是独立的 GPLv3 程序，**本项目不打包它**：自行下载后设置 `IPASIGN_ZSIGN` 指向可执行文件即可。
 
 ## 使用须知
 

@@ -248,17 +248,20 @@ usbmuxd 负责按 UDID 把连接路由到 USB 或网络设备。
 list_devices(wifi=...) 用 DeviceInfo.transport（usb / wifi）过滤，
 install_ipa(..., wifi=True) 找不到网络设备时会给出上面的指引。
 
-## 九、已知问题：0xe8008019
+## 九、踩坑记录：0xe8008019 与 cdhash 截断
 
-自研引擎生成的签名在以下场景会被 iOS 拒绝（`0xe8008019`），而 OpenSSL 校验通过：
+现象：自研签名在 iOS 26 上被拒（`0xe8008019`），而同一份内容的 zsign 签名可以安装，
+且我们的 CMS 用 OpenSSL 校验是通过的。
 
-- 带 **多架构（fat）framework** 的包
-- `Frameworks/` 下存在**独立 dylib**
+定位方法：保留 zsign 的 CodeDirectory、只把 CMS 换成我们生成的 —— 仍然失败，
+于是范围缩小到 CMS。逐属性对比后发现 Apple 的 hash-agility 属性
+（`1.2.840.113635.100.9.1`，内容是 `{cdhashes: [<data>]}` 的 XML plist）里：
 
-已逐项对齐并排除的因素：文件大小、段表、`codeLimit` / `datasize`、代码页哈希、
-CodeDirectory 全部头部字段、entitlements（XML + DER）、资源封印（文件列表与哈希）、
-Info.plist 内容与格式、requirements、CMS 结构/属性/证书顺序。
+- zsign：`SHA-256(CodeDirectory)` 的**前 20 字节**
+- 我们：完整的 32 字节
 
-排查方法：用 zsign 对同一个包签名作为对照，再「替换单个二进制」二分定位。
-目前结论是差异落在 Apple 侧 CMS 校验的某个严格点上，尚未定位；`--engine zsign`
-是临时后备方案。
+Apple 的 cdhash 本身就是截断到 20 字节的 SHA-256，iOS 用它和实际 CD 比对，
+多出来的 12 字节让整个签名被判无效。
+
+修复：生成该 plist 时写入 `cdhash[:20]`；`1.2.840.113635.100.9.2`（DER 形式）
+仍保留完整 32 字节 SHA-256，与 codesign/zsign 一致。回归测试见 `tests/test_cms.py`。

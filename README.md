@@ -171,6 +171,18 @@ ipasign renew <条目> app.ipa -o out.ipa -p <密码> --engine zsign --install
 
 zsign 是独立的 GPLv3 程序，**本项目不打包它**：自行下载后设置 `IPASIGN_ZSIGN` 指向可执行文件即可。
 
+## 已验证
+
+下列开源 App 用本工具（
+ative 引擎）重签后，在 iOS 26.5 的 iPad 上实测安装成功：
+
+| App | 结构特点 |
+| --- | --- |
+| [Dolphin iOS](https://github.com/OatmealDome/dolphin-ios) | 多架构（fat）framework + 独立 dylib |
+| [SideStore](https://github.com/SideStore/SideStore) | framework + App Extension（widget） |
+| [iNDS](https://github.com/iNDS-Team/iNDS) | 主程序为 arm + arm64 多架构 |
+| [Termoso](https://github.com/termoso/termoso) | 完全未签名（无 LC_CODE_SIGNATURE） |
+
 ## 使用须知
 
 - **免费 Apple ID**：证书同时只能有 **1 张**（`maxActive: 1`），描述文件 **7 天**到期。换 App 时用 `--reuse` 复用证书，只重新拉描述文件。

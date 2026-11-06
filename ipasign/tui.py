@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Callable, List, Optional
 
 from rich.console import Console
+from rich import box
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
@@ -187,7 +188,14 @@ def render_home() -> None:
         ", ".join(f"{d.name} ({d.ios_version})" for d in devices) if devices else "[yellow]未检测到[/yellow]",
     )
     status.add_row("配置目录", str(paths.data_dir()))
-    console.print(Panel(status, title="[bold cyan]ipasign[/bold cyan]  iOS 签名工具", border_style="cyan"))
+    console.print(
+        Panel(
+            status,
+            title="[bold cyan]ipasign[/bold cyan]  iOS 签名工具",
+            border_style="cyan",
+            box=box.ASCII,
+        )
+    )
 
     menu = Table(show_header=False, box=None, padding=(0, 2))
     menu.add_column(style="bold cyan", width=4)
@@ -445,7 +453,7 @@ def screen_vault() -> None:
     entry = _choose_vault_entry("证书库")
     if not entry:
         return
-    console.print(Panel.fit(str(entry.meta), title=entry.name))
+    console.print(Panel.fit(str(entry.meta), title=entry.name, box=box.ASCII))
     if Confirm.ask("删除这个条目？", default=False):
         vault.remove(entry.name)
         console.print("[green]已删除[/green]")
@@ -522,7 +530,7 @@ def screen_about() -> None:
         info.add_row("原生库", str(auth.library_path()))
     except Exception:  # noqa: BLE001
         info.add_row("原生库", "[yellow]未找到（登录/签发不可用）[/yellow]")
-    console.print(Panel(info, title="关于"))
+    console.print(Panel(info, title="关于", box=box.ASCII))
 
 
 # ---------------------------------------------------------------------------

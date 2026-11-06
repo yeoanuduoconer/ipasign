@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-from .errors import IpasignError
+from ipasign.core.errors import IpasignError
 
 
 class DeviceError(IpasignError):
@@ -206,7 +206,7 @@ def _ipa_metadata(path: Path) -> "tuple[str, str]":
     import plistlib
     import zipfile
 
-    from .profile import ProvisioningProfile
+    from ipasign.core.profile import ProvisioningProfile
 
     if path.suffix.lower() != ".ipa":
         return "", ""

@@ -7,9 +7,9 @@ import hashlib
 
 import pytest
 
-from ipasign import macho
-from ipasign.derplist import encode_entitlements
-from ipasign.macho import SignParameters, read_signatures, sign_macho
+from ipasign.core import macho
+from ipasign.core.derplist import encode_entitlements
+from ipasign.core.macho import SignParameters, read_signatures, sign_macho
 
 from . import fixtures
 

@@ -4,24 +4,40 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ipasign"
-version = "0.1.0"
-description = "Cross-platform iOS IPA re-signing toolkit with a pure-Python signing engine"
+version = "1.0.0"
+description = "iOS IPA re-signing toolkit: pure-Python signing engine with a terminal UI"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "ipasign" }]
-dependencies = ["cryptography>=41"]
+authors = [{ name = "ipasign contributors" }]
+keywords = ["ios", "ipa", "codesign", "sideload", "mach-o"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: System :: Archiving :: Packaging",
+]
+
+dependencies = [
+    "cryptography>=41",
+    "requests>=2.28",
+    "rich>=13",
+]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
 device = ["pymobiledevice3>=9.0"]
-appleid = ["srp>=3.0", "requests>=2.28"]
+dev = ["pytest>=8"]
+all = ["pymobiledevice3>=9.0", "pytest>=8"]
 
 [project.scripts]
-ipasign = "ipasign.cli:main"
+ipasign = "ipasign.app:main"
 
 [tool.setuptools.packages.find]
 include = ["ipasign*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-q"

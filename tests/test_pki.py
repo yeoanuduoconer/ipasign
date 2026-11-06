@@ -10,8 +10,8 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
-from ipasign import pki
-from ipasign.errors import IdentityError
+from ipasign.core import pki
+from ipasign.core.errors import IdentityError
 
 from . import fixtures
 

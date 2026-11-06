@@ -4,8 +4,12 @@ __pycache__/
 build/
 dist/
 .pytest_cache/
+.ruff_cache/
 .venv/
 venv/
+*.log
+
+# 用户数据，不入库
 *.ipa
 *.p12
 *.mobileprovision
@@ -13,4 +17,5 @@ certs/*.cer
 certs/*.crt
 !certs/.gitkeep
 .ipasign/
+pending-key.pem
 scratch_*.py

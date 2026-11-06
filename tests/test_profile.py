@@ -6,8 +6,8 @@ import datetime as dt
 
 import pytest
 
-from ipasign.errors import ProfileError
-from ipasign.profile import ProvisioningProfile, entitlements_to_xml
+from ipasign.core.errors import ProfileError
+from ipasign.core.profile import ProvisioningProfile, entitlements_to_xml
 
 from . import fixtures
 

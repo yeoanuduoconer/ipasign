@@ -8,7 +8,7 @@ The public API is intentionally small::
                       profile=profile, options=SignOptions())
 """
 
-from .errors import (
+from ipasign.core.errors import (
     BundleError,
     IdentityError,
     IpasignError,

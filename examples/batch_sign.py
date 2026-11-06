@@ -18,9 +18,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from ipasign.bundle import SignOptions, sign_ipa
-from ipasign.pki import ensure_chain, load_identity
-from ipasign.profile import ProvisioningProfile
+from ipasign.core.bundle import SignOptions, sign_ipa
+from ipasign.core.pki import ensure_chain, load_identity
+from ipasign.core.profile import ProvisioningProfile
 
 
 def main() -> int:

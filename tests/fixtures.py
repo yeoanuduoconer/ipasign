@@ -23,7 +23,7 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.x509.oid import NameOID
 
-from ipasign import cms, der
+from ipasign.core import cms, der
 
 CPU_ARM64 = 0x0100000C
 CPU_ARM = 12

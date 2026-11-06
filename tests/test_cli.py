@@ -7,11 +7,12 @@ import plistlib
 
 import pytest
 
-from ipasign import cli, verify
-from ipasign.bundle import SignOptions, sign_app
-from ipasign.bundle import sign_ipa
-from ipasign.pki import SigningIdentity
-from ipasign.profile import ProvisioningProfile
+from ipasign import cli
+from ipasign.core import verify
+from ipasign.core.bundle import SignOptions, sign_app
+from ipasign.core.bundle import sign_ipa
+from ipasign.core.pki import SigningIdentity
+from ipasign.core.profile import ProvisioningProfile
 
 from . import fixtures
 

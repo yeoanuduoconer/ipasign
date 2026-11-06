@@ -7,9 +7,9 @@ import hashlib
 import pytest
 from cryptography.hazmat.primitives import hashes
 
-from ipasign import macho
-from ipasign.cms import verify_detached_cms
-from ipasign.macho import (
+from ipasign.core import macho
+from ipasign.core.cms import verify_detached_cms
+from ipasign.core.macho import (
     SignParameters,
     parse_slice_layout,
     read_signatures,
@@ -144,7 +144,7 @@ def test_special_slots_hash_expected_values():
     assert cd.special_slots[macho.CSSLOT_ENTITLEMENTS] == hashlib.sha256(ent_blob).digest()
 
 def test_encrypted_flag_is_parsed():
-    from ipasign import macho as _macho
+    from ipasign.core import macho as _macho
 
     assert _macho.is_encrypted(fixtures.make_macho(encrypted=True))
     assert not _macho.is_encrypted(fixtures.make_macho())

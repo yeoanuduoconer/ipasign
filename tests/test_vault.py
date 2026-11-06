@@ -8,10 +8,10 @@ import zipfile
 
 import pytest
 
-from ipasign import doctor, vault
-from ipasign.errors import IpasignError
-from ipasign.pki import SigningIdentity
-from ipasign.profile import ProvisioningProfile
+from ipasign.core import doctor, vault
+from ipasign.core.errors import IpasignError
+from ipasign.core.pki import SigningIdentity
+from ipasign.core.profile import ProvisioningProfile
 
 from . import fixtures
 

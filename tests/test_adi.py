@@ -6,7 +6,7 @@ import struct
 
 import pytest
 
-from ipasign.anisette import adi
+from ipasign.apple.anisette import adi
 
 
 def make_state_file(version: int = 3, prefix: bytes = b"0123456789abcdef", blocks: int = 4) -> bytes:

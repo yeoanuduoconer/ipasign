@@ -6,13 +6,13 @@ import plistlib
 import zipfile
 from pathlib import Path
 
-from ipasign import macho
-from ipasign.bundle import SignOptions, sign_app, sign_ipa
-from ipasign.cms import verify_detached_cms
-from ipasign.ipa import extract_ipa
-from ipasign.macho import read_signatures, verify_slice_hashes
-from ipasign.pki import SigningIdentity
-from ipasign.profile import ProvisioningProfile
+from ipasign.core import macho
+from ipasign.core.bundle import SignOptions, sign_app, sign_ipa
+from ipasign.core.cms import verify_detached_cms
+from ipasign.core.ipa import extract_ipa
+from ipasign.core.macho import read_signatures, verify_slice_hashes
+from ipasign.core.pki import SigningIdentity
+from ipasign.core.profile import ProvisioningProfile
 
 from . import fixtures
 

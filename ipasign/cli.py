@@ -12,21 +12,20 @@ import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from . import __version__, bundle, device, ipa, macho
-from . import doctor as doctor_mod
-from . import vault
-from .bundle import SignOptions
-from .errors import IpasignError
-from .pki import (
+from . import __version__, device
+from ipasign.core import bundle, ipa, macho, vault
+from ipasign.core import doctor as doctor_mod
+from ipasign.core.bundle import SignOptions
+from ipasign.core.errors import IpasignError
+from ipasign.core.pki import (
     SigningIdentity,
     describe_chain,
     ensure_chain,
     load_certificate,
     load_identity,
 )
-from .profile import ProvisioningProfile
-from .verify import verify_ipa
-from .zsign_engine import find_zsign, sign_with_zsign
+from ipasign.core.profile import ProvisioningProfile
+from ipasign.core.verify import verify_ipa
 
 
 # ---------------------------------------------------------------------------
@@ -181,21 +180,6 @@ def cmd_sign(args: argparse.Namespace) -> int:
     if output_ipa.exists() and not args.force:
         raise IpasignError(f"输出文件已存在: {output_ipa}（加 --force 覆盖）")
 
-    if args.engine == "zsign":
-        sign_with_zsign(
-            input_ipa,
-            output_ipa,
-            p12=Path(args.p12) if args.p12 else None,
-            password=args.password,
-            profile=Path(args.profile) if args.profile else None,
-            bundle_id=args.bundle_id,
-            entitlements=Path(args.entitlements) if args.entitlements else None,
-            ad_hoc=args.adhoc,
-            zsign=args.zsign,
-            log=log,
-        )
-        print(f"[完成] 已输出: {output_ipa}")
-        return 0
 
     profile = None
     identity = None
@@ -534,7 +518,7 @@ def cmd_identity(args: argparse.Namespace) -> int:
 
 def cmd_login(args: argparse.Namespace) -> int:
     """Log in through the native apple-auth client and list developer teams."""
-    from . import apple_auth_bridge
+    from ipasign.apple import auth as apple_auth_bridge
 
     try:
         library = apple_auth_bridge.library_path()
@@ -618,7 +602,7 @@ def _fetch_developer_teams(headers: Dict[str, str]) -> List[Dict]:
 
 def cmd_issue(args: argparse.Namespace) -> int:
     """Issue a certificate + provisioning profile through the developer portal."""
-    from .issue import issue
+    from ipasign.apple.issue import issue
 
     try:
         result = issue(
@@ -640,18 +624,19 @@ def cmd_issue(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tui(args: argparse.Namespace) -> int:
+    from .tui import main as tui_main
+
+    return tui_main()
+
+
 def cmd_fetch_certs(args: argparse.Namespace) -> int:
-    from .pki import cert_cache_dir, download_apple_certificates
+    from ipasign.core.pki import cert_cache_dir, download_apple_certificates
 
     files = download_apple_certificates(force=args.force, log=print)
     print(f"已缓存 {len(files)} 个证书到 {cert_cache_dir()}")
     return 0
 
-
-def cmd_gui(args: argparse.Namespace) -> int:
-    from .gui import main as gui_main
-
-    return gui_main()
 
 
 # ---------------------------------------------------------------------------
@@ -678,8 +663,6 @@ def build_parser() -> argparse.ArgumentParser:
     sign.add_argument("--no-download", action="store_true", help="不要自动下载 Apple 中间证书")
     sign.add_argument("--no-rewrite-bundle-id", action="store_true", help="禁止自动改写 Bundle ID")
     sign.add_argument("--adhoc", "--ad-hoc", action="store_true", help="仅做 ad-hoc 签名（越狱设备）")
-    sign.add_argument("--engine", choices=["native", "zsign"], default="native", help="签名引擎")
-    sign.add_argument("--zsign", help="zsign 可执行文件路径")
     sign.add_argument("--keep-workdir", help="保留解包目录（调试用）")
     sign.add_argument("--force", action="store_true", help="覆盖已存在的输出文件")
     sign.add_argument("--json", action="store_true", help="以 JSON 输出结果")
@@ -773,6 +756,9 @@ def build_parser() -> argparse.ArgumentParser:
     identity.add_argument("--json", action="store_true")
     identity.set_defaults(func=cmd_identity)
 
+    tui = subparsers.add_parser("tui", help="启动交互式终端界面")
+    tui.set_defaults(func=cmd_tui)
+
     fetch = subparsers.add_parser("fetch-certs", help="下载并缓存 Apple WWDR 中间证书")
     fetch.add_argument("--force", action="store_true")
     fetch.set_defaults(func=cmd_fetch_certs)
@@ -792,8 +778,6 @@ def build_parser() -> argparse.ArgumentParser:
     login.add_argument("--fresh", action="store_true", help="忽略已保存会话，强制重新登录")
     login.set_defaults(func=cmd_login)
 
-    gui = subparsers.add_parser("gui", help="启动图形界面")
-    gui.set_defaults(func=cmd_gui)
 
     return parser
 

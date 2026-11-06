@@ -65,7 +65,7 @@ def _load_identity(
 
 
 def _open_ipa(path: Path):
-    workdir = Path(tempfile.mkdtemp(prefix="ipasign-cli-"))
+    workdir = Path(tempfile.mkdtemp(prefix="ipasign-cli-", dir=str(paths.temp_dir())))
     contents = ipa.extract_ipa(path, workdir)
     return workdir, contents
 

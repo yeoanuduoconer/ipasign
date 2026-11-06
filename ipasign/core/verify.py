@@ -10,6 +10,8 @@ from __future__ import annotations
 import plistlib
 import shutil
 import tempfile
+
+from ipasign import paths
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -186,7 +188,7 @@ def verify_ipa(
     profile: Optional[ProvisioningProfile] = None,
 ) -> VerificationReport:
     ipa_path = Path(ipa_path)
-    workdir = Path(tempfile.mkdtemp(prefix="ipasign-verify-"))
+    workdir = Path(tempfile.mkdtemp(prefix="ipasign-verify-", dir=str(paths.temp_dir())))
     try:
         contents = extract_ipa(ipa_path, workdir)
         report = verify_bundle(contents.app_path, identity=identity, profile=profile)

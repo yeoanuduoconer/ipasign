@@ -7,9 +7,21 @@ from pathlib import Path
 from ipasign import paths
 
 
-def test_data_dir_defaults_to_home(monkeypatch):
+def test_data_dir_prefers_checkout(monkeypatch):
+    """A source checkout keeps everything inside the project folder."""
     monkeypatch.delenv("IPASIGN_HOME", raising=False)
-    assert paths.data_dir() == Path.home() / ".ipasign"
+    root = paths.project_root()
+    if root is None:  # installed copy: falls back to the home directory
+        assert paths.data_dir() == Path.home() / ".ipasign"
+    else:
+        assert paths.data_dir() == root / ".ipasign"
+
+
+def test_temp_dir_lives_inside_data_dir(monkeypatch, tmp_path):
+    monkeypatch.setenv("IPASIGN_HOME", str(tmp_path / "data"))
+    temp = paths.temp_dir()
+    assert temp.is_dir()
+    assert paths.data_dir() in temp.parents
 
 
 def test_data_dir_honours_override(monkeypatch, tmp_path):

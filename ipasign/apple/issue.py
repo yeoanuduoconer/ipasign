@@ -256,7 +256,7 @@ def issue(
         encryption_algorithm=BestAvailableEncryption(password.encode()),
     )
 
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(dir=str(paths.temp_dir())) as tmp:
         p12_path = Path(tmp) / "identity.p12"
         profile_path = Path(tmp) / "profile.mobileprovision"
         p12_path.write_bytes(p12)

@@ -12,6 +12,8 @@ import os
 import plistlib
 import shutil
 import tempfile
+
+from ipasign import paths
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
@@ -513,12 +515,9 @@ def sign_ipa(
         # Unpack next to the output file: a large IPA explodes to several GB
         # and the user's system drive is often the smallest one.  Fall back to
         # the system temp directory when that location is not writable.
-        try:
-            workdir = Path(
-                tempfile.mkdtemp(prefix=".ipasign-work-", dir=str(Path(output_ipa).parent))
-            )
-        except OSError:
-            workdir = Path(tempfile.mkdtemp(prefix="ipasign-"))
+        workdir = Path(
+            tempfile.mkdtemp(prefix=".ipasign-work-", dir=str(paths.temp_dir()))
+        )
     try:
         log(f"unpacking {input_ipa.name} ...")
         contents = extract_ipa(input_ipa, workdir)

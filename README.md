@@ -10,7 +10,7 @@
 │ 证书库    0 套 (空)                                                                      │
 │ 登录      未登录                                                                         │
 │ 设备      iPad (6) (26.5)                                                                │
-│ 配置目录  C:\Users\you\.ipasign                                                          │
+│ 配置目录  <项目目录>\.ipasign                                                             │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
   1  Apple ID 登录（申请开发者会话）        6  证书库管理
   2  申请证书 + 描述文件（证书工厂）        7  设备与驱动信息
@@ -254,7 +254,7 @@ ative 引擎）重签后，在 iOS 26.5 的 iPad 上实测安装成功：
 - **开发者模式**：iOS 16+ 首次运行开发签名的 App，需要在 `设置 → 隐私与安全性 → 开发者模式` 打开并重启。
 - **信任证书**：首次安装后在 `设置 → 通用 → VPN与设备管理` 里信任你的开发者证书。
 - **Wi-Fi 安装**：先用数据线连一次，在 iTunes（Windows）/ Finder（macOS）里勾选「通过 Wi-Fi 同步」，之后 ipasign devices --wifi 能看到设备，ipasign install --wifi 就能无线安装。
-- **自动续签**：ipasign watch add app.ipa --vault <条目> --udid <UDID>，之后 ipasign watch run（检查一次）或 ipasign watch start（前台守护循环；要常驻请用 Windows 任务计划程序 / systemd timer / cron 定时调 watch run）。任务存在 ~/.ipasign/renewals.json，**默认不保存 p12 密码**（运行时提示；加 --save-password 才会明文保存）。
+- **自动续签**：ipasign watch add app.ipa --vault <条目> --udid <UDID>，之后 ipasign watch run（检查一次）或 ipasign watch start（前台守护循环；要常驻请用 Windows 任务计划程序 / systemd timer / cron 定时调 watch run）。任务存在 `<数据目录>/renewals.json`，**默认不保存 p12 密码**（运行时提示；加 --save-password 才会明文保存）。
 - **限流**：Apple 对登录和证书申请有频率限制，HTTP 503 时等 30–60 分钟或换网络。
 - **只签你有权处理的 App**：本工具不绕过 App Store 的 DRM，也不为盗版内容提供便利。
 
@@ -262,8 +262,11 @@ ative 引擎）重签后，在 iOS 26.5 的 iPad 上实测安装成功：
 
 - Apple ID 密码只在本地 `getpass` 中读取，**不写入磁盘、不记录日志**。
 - 落盘的只有：`adi.pb`（设备身份）、`account-session.plist`（登录会话）、证书库里的 p12 与描述文件。
-- 所有配置在 `~/.ipasign/`，删除该目录即可完全重置。
-- 工具自己签发的证书条目，其 p12 密码是**自动生成的随机值**，保存在 `~/.ipasign/identities/<条目>/meta.json`（本机明文，只有本用户可读）。这样签名时无需再输入。
+- 所有配置在 **项目目录下的 `.ipasign/`**（源码目录运行时），删除该目录即可完全重置。
+  用 pip 安装到 site-packages 时没有项目目录可用，则回落到 `~/.ipasign/`；
+  也可以用环境变量 `IPASIGN_HOME` 指定任意位置。签名解包等临时文件都在
+  `<数据目录>/tmp/` 下，签完自动清理。
+- 工具自己签发的证书条目，其 p12 密码是**自动生成的随机值**，保存在 `<数据目录>/identities/<条目>/meta.json`（本机明文，只有本用户可读）。这样签名时无需再输入。
 - 你**导入**的 p12 不会被记录密码，使用时仍需提供。
 
 ## 开发

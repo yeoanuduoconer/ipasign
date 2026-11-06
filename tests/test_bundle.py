@@ -8,6 +8,7 @@ from pathlib import Path
 
 from ipasign.core import macho
 import ipasign.core.bundle as bundle_mod
+from ipasign import paths
 from ipasign.core.bundle import SignOptions, sign_app, sign_ipa
 from ipasign.core.cms import verify_detached_cms
 from ipasign.core.ipa import extract_ipa
@@ -176,6 +177,6 @@ def test_workdir_is_created_next_to_output(tmp_path, monkeypatch):
     sign_ipa(ipa, out, identity=identity, profile=profile, options=SignOptions())
 
     assert out.is_file()
-    assert captured["workdir"].parent == target_dir
+    assert paths.data_dir() in captured["workdir"].parents
     assert not captured["workdir"].exists(), "workdir should be cleaned up"
 

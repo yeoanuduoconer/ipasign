@@ -38,12 +38,40 @@ from typing import Iterable, List, Optional
 APP_NAME = "ipasign"
 
 
+def project_root() -> Optional[Path]:
+    """The source checkout containing this package, if any.
+
+    Everything ipasign produces lives inside the checkout (``<project>/.ipasign``)
+    so a project folder is fully self-contained.  An installed copy has no
+    checkout, so it falls back to the per-user directory.
+    """
+    if frozen():
+        return None
+    candidate = Path(__file__).resolve().parent.parent
+    if (candidate / "pyproject.toml").is_file():
+        return candidate
+    return None
+
+
 def data_dir() -> Path:
-    """Where ipasign keeps vault, sessions and jobs (created on demand)."""
+    """Where ipasign keeps vault, sessions and jobs (created on demand).
+
+    Order: ``IPASIGN_HOME`` → the source checkout → the user home directory.
+    """
     override = os.environ.get("IPASIGN_HOME")
     if override:
         return Path(override).expanduser()
+    root = project_root()
+    if root is not None:
+        return root / f".{APP_NAME}"
     return Path.home() / f".{APP_NAME}"
+
+
+def temp_dir() -> Path:
+    """Scratch space for staging files, inside the data directory."""
+    path = ensure_data_dir() / "tmp"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def ensure_data_dir() -> Path:

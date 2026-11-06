@@ -1,0 +1,24 @@
+# 统一换行符：仓库内一律 LF，检出时按平台
+* text=auto eol=lf
+
+# 二进制：不要做行尾转换，也不要当文本 diff
+*.dll binary
+*.exe binary
+*.so binary
+*.dylib binary
+*.cer binary
+*.p12 binary
+*.mobileprovision binary
+*.ipa binary
+*.pb binary
+*.png binary
+*.jpg binary
+
+# 语言统计：内置原生库不计入
+ipasign/native/** linguist-vendored
+ipasign/vendor/** linguist-vendored
+
+# 文档换行
+*.md text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf

@@ -49,4 +49,5 @@ ipasign = [
     "native/*/*.dylib",
     "native/*.md",
     "vendor/apple-auth.LICENSE",
+    "py.typed",
 ]

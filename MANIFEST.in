@@ -1,0 +1,15 @@
+include LICENSE
+include README.md
+include THIRD_PARTY_NOTICES.md
+include CHANGELOG.md
+include SECURITY.md
+include CONTRIBUTING.md
+recursive-include ipasign/native *
+recursive-include ipasign/vendor/apple_auth *.py
+include ipasign/py.typed
+recursive-include docs *.md
+recursive-include tests *.py
+recursive-include examples *.py
+prune .github
+prune .ipasign
+global-exclude *.py[cod] __pycache__

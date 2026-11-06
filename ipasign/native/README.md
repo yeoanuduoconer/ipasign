@@ -1,10 +1,11 @@
-# 内置原生库（Windows x64）
+# Bundled native libraries (Windows x64)
 
-这些 DLL 让「登录 Apple ID / 申请证书」开箱即用，**不需要用户自己编译**。
+These DLLs make "sign in with an Apple ID / issue a certificate" work out of the
+box — **no local build required**.
 
-## 来源
+## Provenance
 
-从 [apple-auth](https://github.com/apple-auth/apple-auth)（MIT）源码编译：
+Built from the [apple-auth](https://github.com/apple-auth/apple-auth) source (MIT):
 
 ```bash
 git clone https://github.com/apple-auth/apple-auth
@@ -15,15 +16,15 @@ cmake -S apple-auth -B apple-auth-client -G "Visual Studio 17 2022" -A x64 \
 cmake --build apple-auth-client --config Release
 ```
 
-| 文件 | 作用 | 来源 |
+| File | Purpose | Origin |
 | --- | --- | --- |
-| `apple_auth_client.dll` | GrandSlam 登录、2FA、开发者会话 | apple-auth |
-| `apple_auth.dll` | ADI 解析、OTP 生成、provisioning | apple-auth |
-| `libcurl.dll` | HTTPS 传输 | curl |
-| `plist-2.0.dll` | plist 编解码 | libplist |
-| `z.dll` | 压缩 | zlib |
+| `apple_auth_client.dll` | GrandSlam sign-in, 2FA, developer session | apple-auth |
+| `apple_auth.dll` | ADI parsing, OTP generation, provisioning | apple-auth |
+| `libcurl.dll` | HTTPS transport | curl |
+| `plist-2.0.dll` | plist encoding/decoding | libplist |
+| `z.dll` | compression | zlib |
 
-## 校验和
+## Checksums
 
 ```
 bf634ecb99a761c0787b73ef3fc54ee67d7a182d012ccb3b7b3e1d28b3c8b5ae  apple_auth_client.dll
@@ -33,22 +34,22 @@ f93b6d13bd5423cefafabcac0c7ce4a9a5b0bb7024084679250602ef50945e0e  apple_auth.dll
 d3f6e896c197f561e2b78692983d211cf13d92413f24a0cfd7714c0f4133c466  z.dll
 ```
 
-## 覆盖与替换
+## Overriding the bundled build
 
-优先级（`ipasign/paths.py`）：
+Search order (`ipasign/paths.py`):
 
 ```
-1. 环境变量 APPLE_AUTH_LIBRARY / IPASIGN_NATIVE_DIR
-2. ~/.ipasign/native/           ← 用户自己编译的新版本放这里
-3. 本目录（内置）
-4. 仓库同级开发目录
-5. 平台数据目录
+1. environment: APPLE_AUTH_LIBRARY / IPASIGN_NATIVE_DIR
+2. ~/.ipasign/native/           <- put a locally built version here
+3. this directory (bundled)
+4. a development build next to the checkout
+5. the platform application-data directory
 ```
 
-想用自己编译的版本，放到 `~/.ipasign/native/` 即可覆盖内置版本。
+A locally built copy in `~/.ipasign/native/` takes precedence over the bundled one.
 
-## 其他平台
+## Other platforms
 
-目前只内置了 **Windows x64**。macOS / Linux / Windows ARM64 需要自行编译，
-放到 `~/.ipasign/native/`（文件名：`libapple_auth_client.so`、
-`libapple_auth_client.dylib` 等，`ipasign/paths.py` 会按平台查找）。
+Only **Windows x64** is bundled. macOS / Linux / Windows ARM64 need a local
+build, placed in `~/.ipasign/native/` (file names: `libapple_auth_client.so`,
+`libapple_auth_client.dylib`, and so on; `ipasign/paths.py` resolves per platform).

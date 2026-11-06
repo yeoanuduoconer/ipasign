@@ -24,13 +24,13 @@ from ipasign.core.profile import ProvisioningProfile
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="批量重签文件夹内的 IPA")
-    parser.add_argument("source", help="包含 .ipa 的目录")
-    parser.add_argument("output", help="输出目录")
+    parser = argparse.ArgumentParser(description="Re-sign every IPA in a folder")
+    parser.add_argument("source", help="Directory containing .ipa files")
+    parser.add_argument("output", help="Output directory")
     parser.add_argument("-c", "--p12", required=True)
     parser.add_argument("-p", "--password")
     parser.add_argument("-m", "--profile", required=True)
-    parser.add_argument("-b", "--bundle-id", help="强制指定 Bundle ID（单 App 时可用）")
+    parser.add_argument("-b", "--bundle-id", help="Force this Bundle ID (useful when signing a single app)")
     args = parser.parse_args()
 
     source = Path(args.source)
@@ -56,16 +56,16 @@ def main() -> int:
                 options=options,
                 log=lambda message: print("  " + message),
             )
-            print(f"  完成: {report.bundle_id} ({len(report.steps)} 个 Mach-O)")
+            print(f"  done: {report.bundle_id} ({len(report.steps)} Mach-O files)")
             for warning in report.warnings:
-                print(f"  [警告] {warning}")
+                print(f"  [warning] {warning}")
             succeeded += 1
         except Exception as exc:  # noqa: BLE001 - keep the batch going
-            print(f"  失败: {exc}")
+            print(f"  failed: {exc}")
             traceback.print_exc()
             failed += 1
 
-    print(f"\n完成 {succeeded} 个，失败 {failed} 个")
+    print(f"\n{succeeded} succeeded, {failed} failed")
     return 0 if failed == 0 else 1
 
 

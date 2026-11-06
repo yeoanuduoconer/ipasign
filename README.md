@@ -38,6 +38,39 @@
 
 ## 安装
 
+### 零依赖：单文件可执行（推荐）
+
+不想装 Python 的话，直接用打包好的单个可执行文件：
+
+```
+ipasign.exe        （Windows x64，约 80 MB）
+```
+
+它内置了 Python 运行时、所有依赖库、原生登录库 —— **目标机器不需要安装任何东西**：
+不用 Python、不用 pip、不用编译器。
+
+```powershell
+.\ipasign.exe            # 交互式界面
+.\ipasign.exe selfcheck  # 检查依赖、路径、设备
+```
+
+**唯一的系统要求**：如果你想「装到 iPhone/iPad」，Windows 需要安装 Apple 的
+USB 驱动（iTunes 或「Apple Devices」应用提供，装一次即可）。这是系统级驱动，
+任何工具都绕不开；**签名、登录、申请证书完全不需要它**。macOS 自带该驱动。
+
+首次运行可能出现 Windows「未知发布者」提示（可执行文件没有代码签名），
+选择「仍要运行」即可；介意的话可以按下面的方式从源码运行。
+
+自己打包：
+
+```bash
+pip install pyinstaller
+pyinstaller --noconfirm --clean packaging/ipasign.spec
+# 产物在 dist/ipasign.exe
+```
+
+### 从源码安装
+
 ```bash
 # 基础功能（签名 / 校验 / 证书库 / TUI）
 pip install -e .
@@ -137,6 +170,7 @@ ipasign renew <条目名> 原版.ipa -o 已签名.ipa -p <p12密码> --install
 | `ipasign doctor <ipa> --vault <条目>` | 签名体检 |
 | `ipasign vault list/import/show/rm` | 证书库管理 |
 | `ipasign devices [--wifi]` | 列出已连接设备 |
+| `ipasign selfcheck` | 检查运行依赖、路径、原生库、设备 |
 | `ipasign watch add/list/rm/run/start` | 自动续签任务管理 |
 | `ipasign info <ipa>` | 查看 IPA 基本信息 |
 | `ipasign profile <file>` | 查看描述文件 |

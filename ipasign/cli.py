@@ -759,6 +759,48 @@ def cmd_watch(args: argparse.Namespace) -> int:
     raise IpasignError(f"未知操作: {action}")
 
 
+def cmd_selfcheck(args: argparse.Namespace) -> int:
+    """Print what this build can do and where it looks for things."""
+    from . import paths
+
+    print(f"版本        : {__version__}")
+    print(f"运行方式    : {'单文件可执行' if paths.frozen() else '源码 / pip 安装'}")
+    print(f"数据目录    : {paths.data_dir()}")
+    print(f"平台        : {paths.platform_tag()}")
+
+    try:
+        from .apple import auth
+
+        library = auth.library_path()
+        print(f"原生客户端  : {library}")
+    except Exception as error:  # noqa: BLE001
+        print(f"原生客户端  : 不可用（{error}）")
+
+    try:
+        from .apple.anisette import native
+
+        print(f"原生核心库  : {native.find_library()}")
+    except Exception as error:  # noqa: BLE001
+        print(f"原生核心库  : 不可用（{error}）")
+
+    from .core import zsign_backend
+
+    print(f"zsign 后备  : {zsign_backend.find_zsign() or '未安装（可选）'}")
+
+    try:
+        from .device import list_devices
+
+        devices = list_devices()
+        names = ", ".join(f"{d.name} ({d.transport})" for d in devices) or "未连接"
+        print(f"设备        : {names}")
+    except Exception as error:  # noqa: BLE001
+        print(f"设备        : 不可用（{error}）")
+
+    entries = vault.list_all()
+    print(f"证书库      : {len(entries)} 套" + (": " + ", ".join(e.name for e in entries) if entries else ""))
+    return 0
+
+
 def cmd_fetch_certs(args: argparse.Namespace) -> int:
     from ipasign.core.pki import cert_cache_dir, download_apple_certificates
 
@@ -933,6 +975,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--interval-minutes", type=float, default=60.0)
     p.add_argument("--threshold-hours", type=float, default=24.0)
     p.set_defaults(func=cmd_watch)
+
+    selfcheck = subparsers.add_parser("selfcheck", help="检查运行依赖与路径")
+    selfcheck.set_defaults(func=cmd_selfcheck)
 
     fetch = subparsers.add_parser("fetch-certs", help="下载并缓存 Apple WWDR 中间证书")
     fetch.add_argument("--force", action="store_true")

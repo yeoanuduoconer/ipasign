@@ -206,29 +206,37 @@ def install_ipa(
     if target is not None:
         log(f"目标设备: {target.label()} ({target.udid}, {target.transport})")
 
-    command = [sys.executable, "-m", "pymobiledevice3", "apps", "install", str(path)]
-    if udid:
-        command += ["--udid", udid]
-    if developer:
-        command.append("--developer")
     log("上传并安装中（大文件需要几分钟）...")
-    process = subprocess.run(
-        command, capture_output=True, text=True, encoding="utf-8", errors="replace",
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
-    for line in (process.stdout or "").splitlines():
-        log(line)
-    if process.returncode != 0:
-        detail = (process.stderr or process.stdout or "").strip()
-        # pymobiledevice3 prints progress lines before the actual failure; keep
-        # the last error-looking line so the message is not truncated mid-way.
-        interesting = [
-            line for line in detail.splitlines()
-            if "ERROR" in line or "Error Domain" in line or "error:" in line
-        ]
-        if interesting:
-            detail = interesting[-1]
-        raise DeviceError(friendly_error(detail))
+    api_error = None
+    try:
+        asyncio.run(_install_async(path, udid, developer))
+    except Exception as error:  # noqa: BLE001
+        api_error = error
+
+    if api_error is not None and not getattr(sys, "frozen", False):
+        # Source checkout: retry through the CLI, which reports progress.
+        command = [sys.executable, "-m", "pymobiledevice3", "apps", "install", str(path)]
+        if udid:
+            command += ["--udid", udid]
+        if developer:
+            command.append("--developer")
+        process = subprocess.run(
+            command, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        for line in (process.stdout or "").splitlines():
+            log(line)
+        if process.returncode != 0:
+            detail = (process.stderr or process.stdout or "").strip()
+            interesting = [
+                line for line in detail.splitlines()
+                if "ERROR" in line or "Error Domain" in line or "error:" in line
+            ]
+            if interesting:
+                detail = interesting[-1]
+            raise DeviceError(friendly_error(detail))
+    elif api_error is not None:
+        raise DeviceError(friendly_error(str(api_error)))
 
     _confirm_installed(path, udid, log=log)
     return udid
@@ -274,12 +282,41 @@ def _ipa_metadata(path: Path) -> "tuple[str, str]":
     return bundle_id, team_id
 
 
+async def _install_async(path: Path, udid: str, developer: bool) -> None:
+    from pymobiledevice3.lockdown import create_using_usbmux
+    from pymobiledevice3.services.installation_proxy import InstallationProxyService
+
+    client = await create_using_usbmux(serial=udid)
+    service = InstallationProxyService(client)
+    try:
+        await service.install_from_local(str(path), developer=developer)
+    finally:
+        await service.close()
+
+
+async def _list_apps_async(udid: str) -> dict:
+    from pymobiledevice3.lockdown import create_using_usbmux
+    from pymobiledevice3.services.installation_proxy import InstallationProxyService
+
+    client = await create_using_usbmux(serial=udid)
+    service = InstallationProxyService(client)
+    try:
+        return await service.get_apps()
+    finally:
+        await service.close()
+
 def _list_apps(udid: str) -> "dict | None":
     """Return the installed-app dictionary, or None when the query failed.
 
     The query fails while the device is locked or busy installing, which must
     not be confused with "the app is not installed".
     """
+    try:
+        return asyncio.run(_list_apps_async(udid))
+    except Exception:  # noqa: BLE001 - fall back to the CLI in a source checkout
+        pass
+    if getattr(sys, "frozen", False):
+        return None
     try:
         process = subprocess.run(
             [sys.executable, "-m", "pymobiledevice3", "apps", "list", "--udid", udid],

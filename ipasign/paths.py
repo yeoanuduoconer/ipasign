@@ -68,6 +68,8 @@ def _package_neighbours() -> List[Path]:
     package = Path(__file__).resolve().parent          # .../ipasign
     project = package.parent                            # repo root
     candidates: List[Path] = []
+    if frozen():
+        return []
     for root in (project, project.parent, package):
         candidates.extend(
             [
@@ -91,9 +93,24 @@ def platform_tag() -> str:
     return f"linux-{arch}"
 
 
+def frozen() -> bool:
+    """True inside a PyInstaller executable."""
+    return bool(getattr(sys, "frozen", False))
+
+
+def _bundle_root() -> Path:
+    """Where data files live: the package dir, or the frozen bundle root."""
+    if frozen():
+        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+    return Path(__file__).resolve().parent
+
+
 def bundled_native_dirs() -> List[Path]:
     """Native libraries shipped inside the package (no build required)."""
-    base = Path(__file__).resolve().parent / "native"
+    if frozen():
+        base = _bundle_root() / "ipasign" / "native"
+    else:
+        base = _bundle_root() / "native"
     return [base / platform_tag(), base]
 
 
